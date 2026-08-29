@@ -61,7 +61,7 @@ class OfflineModelFailureTest(unittest.TestCase):
         """Model failure contributes 0.0; aggregate still complete over fixed denominator."""
         model_failed = {"complete": False, "failure_class": "model", "error": "parse_fail"}
         results = {"a": _complete_offline_result(0.5), "b": model_failed}
-        agg = aggregate_results("wm", "WM-Markov", ["a", "b"], results, full=True)
+        agg = aggregate_results("wm", "WM-NoHist", ["a", "b"], results, full=True)
         self.assertTrue(agg["complete"])
         self.assertEqual(agg["failure_counts"]["model"], 1)
         self.assertEqual(agg["failure_counts"]["infra_blocked"], 0)
@@ -72,7 +72,7 @@ class OfflineModelFailureTest(unittest.TestCase):
         """Infrastructure failure blocks formal aggregate."""
         infra = {"complete": False, "failure_class": "infrastructure", "error": "timeout"}
         results = {"a": _complete_offline_result(0.5), "b": infra}
-        agg = aggregate_results("wm", "WM-Markov", ["a", "b"], results, full=True)
+        agg = aggregate_results("wm", "WM-NoHist", ["a", "b"], results, full=True)
         self.assertFalse(agg["complete"])
         self.assertEqual(agg["failure_counts"]["infra_blocked"], 1)
         self.assertIsNone(agg["metrics"]["Overall"])

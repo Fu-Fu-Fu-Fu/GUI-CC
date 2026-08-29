@@ -54,7 +54,7 @@ class _FakeAgent:
 
 
 class _FakeWorldModel:
-    history_setting = "WM-Markov"
+    history_setting = "WM-NoHist"
 
     def __init__(self, prediction_path: Path) -> None:
         self.prediction_path = prediction_path

@@ -269,7 +269,7 @@ def main() -> None:
     config = load_project_json(ONLINE_CONFIG)
     parser = argparse.ArgumentParser(description="Run a GUI-CC online rollout")
     parser.add_argument("--model", required=True)
-    parser.add_argument("--setting", choices=["WM-Markov", "WM-FullHist"], required=True)
+    parser.add_argument("--setting", choices=["WM-NoHist", "WM-FullHist"], required=True)
     parser.add_argument("--task-ids", help="generate only these tasks (comma separated); default is all 200")
     parser.add_argument("--subset", type=int, metavar="N",
                         help="generate only the fixed evenly spaced subset of N samples (identical across models; see utils/subset.py)")
@@ -328,7 +328,7 @@ def main() -> None:
             parser.error(str(error))
         if not task_ids:
             parser.error("this online shard got no tasks; reduce --shard-count")
-    history_dir = "fullhist" if args.setting == "WM-FullHist" else "markov"
+    history_dir = "fullhist" if args.setting == "WM-FullHist" else "nohist"
     output_root = (
         Path(args.output_root).expanduser().resolve()
         if args.output_root

@@ -170,7 +170,7 @@ def create_adapter(
             adapter.served_model_name = str(spec["model"])
 
     model_id = str(spec["id"])
-    history_dir = "fullhist" if history_setting == "WM-FullHist" else "markov"
+    history_dir = "fullhist" if history_setting == "WM-FullHist" else "nohist"
     adapter.name = model_id
     adapter.persist_root = Path(persist_root) / model_id / history_dir
     adapter.persist_root.mkdir(parents=True, exist_ok=True)

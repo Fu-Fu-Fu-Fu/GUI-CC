@@ -41,7 +41,7 @@ API_CLIENT = None
 def _arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Evaluate an offline GUI world-model rollout.")
     parser.add_argument("--model", required=True, help="world-model identifier")
-    parser.add_argument("--setting", choices=["WM-Markov", "WM-FullHist"], default="WM-Markov")
+    parser.add_argument("--setting", choices=["WM-NoHist", "WM-FullHist"], default="WM-NoHist")
     parser.add_argument("--sample-ids", help="evaluate only these samples (comma separated); default is all 500")
     parser.add_argument("--subset", type=int, metavar="N",
                         help="evaluate only the fixed evenly spaced subset of N samples (identical across models; see utils/subset.py)")
@@ -91,7 +91,7 @@ def _load_episodes(sample_ids: list[str], wm: str, setting: str,
     data/ 下的数据集是仓库内不可变内容（由 scripts/validate_data.py 保证），这里直接信任。
     """
     episodes = []
-    history_dir = "fullhist" if setting == "WM-FullHist" else "markov"
+    history_dir = "fullhist" if setting == "WM-FullHist" else "nohist"
     for sample_id in sample_ids:
         sample_dir = OFFLINE_DATA_ROOT / sample_id
         prediction_dir = OFFLINE_PREDICTIONS_ROOT / wm / history_dir / sample_id
@@ -145,7 +145,7 @@ def _preflight(episodes: list[dict], model_failure_steps: dict[str, int]) -> dic
 
 def run(args: argparse.Namespace) -> int:
     sample_ids, is_partial = _select_samples(args)
-    history_dir = "fullhist" if args.setting == "WM-FullHist" else "markov"
+    history_dir = "fullhist" if args.setting == "WM-FullHist" else "nohist"
     prediction_config_dir = OFFLINE_PREDICTIONS_ROOT / args.model / history_dir
     output_dir = OFFLINE_EVALUATION_ROOT / args.model / history_dir
     output_dir.mkdir(parents=True, exist_ok=True)

@@ -45,7 +45,7 @@ class OfflineMetricTest(unittest.TestCase):
 
     def test_aggregate分母必须匹配请求的episode(self) -> None:
         aggregate = aggregate_results(
-            "wm", "WM-Markov", ["a", "b"], {"a": complete_result(0.5)}, full=True
+            "wm", "WM-NoHist", ["a", "b"], {"a": complete_result(0.5)}, full=True
         )
         self.assertFalse(aggregate["complete"])
         self.assertEqual(aggregate["n_episodes_requested"], 2)
@@ -55,7 +55,7 @@ class OfflineMetricTest(unittest.TestCase):
 
     def test_partial评测不会生成formal_overall(self) -> None:
         aggregate = aggregate_results(
-            "wm", "WM-Markov", ["a", "b"],
+            "wm", "WM-NoHist", ["a", "b"],
             {"a": complete_result(0.0), "b": complete_result(1.0)}, full=False,
         )
         self.assertTrue(aggregate["complete"])
@@ -65,7 +65,7 @@ class OfflineMetricTest(unittest.TestCase):
 
     def test_全量评测的表格分数同时包含原值和百分数(self) -> None:
         aggregate = aggregate_results(
-            "wm", "WM-Markov", ["a", "b"],
+            "wm", "WM-NoHist", ["a", "b"],
             {"a": complete_result(0.0), "b": complete_result(1.0)}, full=True,
         )
         self.assertEqual(aggregate["metrics"]["Overall"], 0.5)
@@ -76,7 +76,7 @@ class OfflineMetricTest(unittest.TestCase):
         first = 0.12344
         second = 0.12347
         aggregate = aggregate_results(
-            "wm", "WM-Markov", ["a", "b"],
+            "wm", "WM-NoHist", ["a", "b"],
             {"a": complete_result(first), "b": complete_result(second)},
             full=True,
         )
@@ -166,7 +166,7 @@ class OfflineInputTest(unittest.TestCase):
         }
 
         def config(base_url="https://a", extra=None):
-            return evaluation_config("wm", "WM-Markov", base_url,
+            return evaluation_config("wm", "WM-NoHist", base_url,
                                      extra_config=extra or {"x": 1})
 
         first = build_signature(episode, config())

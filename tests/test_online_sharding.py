@@ -34,9 +34,9 @@ class PartitionTest(unittest.TestCase):
         self.assertEqual(partition_task_ids(ids, 2, 1), ["task1", "task3"])
 
     def test_worker_root路径包含模型setting与序号(self) -> None:
-        root = shard_worker_root(Path("/out"), "gworld", "WM-Markov", 4, 2)
+        root = shard_worker_root(Path("/out"), "gworld", "WM-NoHist", 4, 2)
         self.assertEqual(
-            root, Path("/out/.shards/gworld-markov/shard-00002-of-00004")
+            root, Path("/out/.shards/gworld-nohist/shard-00002-of-00004")
         )
 
 
@@ -46,8 +46,8 @@ class MergeTest(unittest.TestCase):
         task_ids: list[str], run: dict,
     ) -> None:
         output_dir = (
-            shard_worker_root(output_root, "wm", "WM-Markov", shard_count, index)
-            / "wm" / "markov"
+            shard_worker_root(output_root, "wm", "WM-NoHist", shard_count, index)
+            / "wm" / "nohist"
         )
         results: dict = {"_RUN": run}
         for task_id in task_ids:
@@ -61,7 +61,7 @@ class MergeTest(unittest.TestCase):
 
     def test_merge按任务文件顺序产出rollout_results(self) -> None:
         task_ids = ["task_a", "task_b", "task_c"]
-        run = {"model": {"model_id": "wm", "history_setting": "WM-Markov"}, "run_sha256": "r1"}
+        run = {"model": {"model_id": "wm", "history_setting": "WM-NoHist"}, "run_sha256": "r1"}
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             tasks_file = root / "online_samples.jsonl"
@@ -73,7 +73,7 @@ class MergeTest(unittest.TestCase):
             self._build_shard(output_root, 0, 2, ["task_a", "task_c"], run)
             self._build_shard(output_root, 1, 2, ["task_b"], run)
             final = merge_shards(
-                model="wm", setting="WM-Markov", tasks_file=tasks_file,
+                model="wm", setting="WM-NoHist", tasks_file=tasks_file,
                 output_root=output_root, shard_count=2,
             )
             merged = json.loads((final / "rollout_results.json").read_text())
@@ -83,7 +83,7 @@ class MergeTest(unittest.TestCase):
 
     def test_merge拒绝缺失任务(self) -> None:
         task_ids = ["task_a", "task_b"]
-        run = {"model": {"model_id": "wm", "history_setting": "WM-Markov"}, "run_sha256": "r1"}
+        run = {"model": {"model_id": "wm", "history_setting": "WM-NoHist"}, "run_sha256": "r1"}
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             tasks_file = root / "online_samples.jsonl"
@@ -96,7 +96,7 @@ class MergeTest(unittest.TestCase):
             self._build_shard(output_root, 1, 2, [], run)
             with self.assertRaisesRegex(ValueError, "is missing or unfinished"):
                 merge_shards(
-                    model="wm", setting="WM-Markov", tasks_file=tasks_file,
+                    model="wm", setting="WM-NoHist", tasks_file=tasks_file,
                     output_root=output_root, shard_count=2,
                 )
 

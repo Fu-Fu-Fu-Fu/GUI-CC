@@ -44,8 +44,8 @@ class MergeTest(unittest.TestCase):
         sample_ids: list[str], run: dict,
     ) -> None:
         config_dir = (
-            shard_worker_root(output_root, "wm", "WM-Markov", shard_count, index)
-            / "wm" / "markov"
+            shard_worker_root(output_root, "wm", "WM-NoHist", shard_count, index)
+            / "wm" / "nohist"
         )
         samples = {}
         for sample_id in sample_ids:
@@ -67,7 +67,7 @@ class MergeTest(unittest.TestCase):
         return samples_file
 
     def test_merge按样本顺序产出单一目录(self) -> None:
-        run = {"model": {"model_id": "wm", "history_setting": "WM-Markov"}, "run_sha256": "r1"}
+        run = {"model": {"model_id": "wm", "history_setting": "WM-NoHist"}, "run_sha256": "r1"}
         sample_ids = ["001", "002", "003"]
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -76,7 +76,7 @@ class MergeTest(unittest.TestCase):
             self._build_shard(output_root, 0, 2, ["001", "003"], run)
             self._build_shard(output_root, 1, 2, ["002"], run)
             final = merge_shards(
-                model="wm", setting="WM-Markov",
+                model="wm", setting="WM-NoHist",
                 output_root=output_root, shard_count=2, samples_file=samples_file,
             )
             summary = json.loads((final / "summary.json").read_text())
@@ -86,13 +86,13 @@ class MergeTest(unittest.TestCase):
             # 合并目录已存在时拒绝覆盖
             with self.assertRaisesRegex(ValueError, "refusing to overwrite"):
                 merge_shards(
-                    model="wm", setting="WM-Markov",
+                    model="wm", setting="WM-NoHist",
                     output_root=output_root, shard_count=2, samples_file=samples_file,
                 )
 
     def test_merge拒绝run配置不一致或样本缺失(self) -> None:
-        run_a = {"model": {"model_id": "wm", "history_setting": "WM-Markov"}, "run_sha256": "ra"}
-        run_b = {"model": {"model_id": "wm", "history_setting": "WM-Markov"}, "run_sha256": "rb"}
+        run_a = {"model": {"model_id": "wm", "history_setting": "WM-NoHist"}, "run_sha256": "ra"}
+        run_b = {"model": {"model_id": "wm", "history_setting": "WM-NoHist"}, "run_sha256": "rb"}
         sample_ids = ["001", "002"]
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -102,7 +102,7 @@ class MergeTest(unittest.TestCase):
             self._build_shard(output_root, 1, 2, ["002"], run_b)
             with self.assertRaisesRegex(ValueError, "differs from the other shards"):
                 merge_shards(
-                    model="wm", setting="WM-Markov",
+                    model="wm", setting="WM-NoHist",
                     output_root=output_root, shard_count=2, samples_file=samples_file,
                 )
         with tempfile.TemporaryDirectory() as tmp:
@@ -113,7 +113,7 @@ class MergeTest(unittest.TestCase):
             self._build_shard(output_root, 1, 2, [], run_a)
             with self.assertRaisesRegex(ValueError, "is missing or unfinished"):
                 merge_shards(
-                    model="wm", setting="WM-Markov",
+                    model="wm", setting="WM-NoHist",
                     output_root=output_root, shard_count=2, samples_file=samples_file,
                 )
 

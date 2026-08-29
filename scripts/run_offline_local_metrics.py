@@ -27,16 +27,16 @@ from offline.data import (  # noqa: E402
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--model", required=True)
-    parser.add_argument("--setting", choices=("WM-Markov", "WM-FullHist"), required=True)
+    parser.add_argument("--setting", choices=("WM-NoHist", "WM-FullHist"), required=True)
     parser.add_argument("--destination",
-                        help="output directory (default outputs/offline/evaluation/<model>/<markov|fullhist>)")
+                        help="output directory (default outputs/offline/evaluation/<model>/<nohist|fullhist>)")
     parser.add_argument("--subset", type=int, metavar="N",
                         help="score only the fixed evenly spaced subset of N samples "
                              "(identical across models; see utils/subset.py)")
     parser.add_argument("--sample-ids", help="score only these samples (comma separated)")
 
     args = parser.parse_args(argv)
-    history = "markov" if args.setting == "WM-Markov" else "fullhist"
+    history = "nohist" if args.setting == "WM-NoHist" else "fullhist"
     config_dir = OFFLINE_PREDICTIONS_ROOT / args.model / history
     destination = (
         Path(args.destination).expanduser().resolve()

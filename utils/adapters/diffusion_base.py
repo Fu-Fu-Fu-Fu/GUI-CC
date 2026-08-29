@@ -34,9 +34,9 @@ class DiffusionPrediction:
 
 class BaseDiffusionAdapter:
     name: str = "diffusion_base"
-    history_setting: str = "WM-Markov"
+    history_setting: str = "WM-NoHist"
 
-    def __init__(self, persist_root: str, history_setting: str = "WM-Markov",
+    def __init__(self, persist_root: str, history_setting: str = "WM-NoHist",
                  device: str = "cuda", seed: int = 42, num_steps: int = 40,
                  flat_output: bool = False):
         self.history_setting = history_setting
@@ -44,7 +44,7 @@ class BaseDiffusionAdapter:
         if flat_output:
             self.persist_root = Path(persist_root) / self.name
         else:
-            history_dir = "fullhist" if history_setting == "WM-FullHist" else "markov"
+            history_dir = "fullhist" if history_setting == "WM-FullHist" else "nohist"
             self.persist_root = Path(persist_root) / self.name / history_dir
         self.persist_root.mkdir(parents=True, exist_ok=True)
         self.device = device

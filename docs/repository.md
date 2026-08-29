@@ -47,7 +47,7 @@ per-file mapping to the paper's figures is in `utils/prompts/README.md`.
 | `paper_prompts.py` | named access to the model prompts |
 | `judge_prompts.py` | named access to the judge prompts |
 | `model/agent_planner_*` | online agent prompt |
-| `model/code2world_*`, `gworld_*`, `mobileworld_*`, `html_wm_*` | Markov and history prompts for the HTML models |
+| `model/code2world_*`, `gworld_*`, `mobileworld_*`, `html_wm_*` | no-history and with-history prompts for the HTML models |
 | `model/closed_image_generation.md`, `flux_mobileworld_diffusion.md`, `qwen_image_edit.md` | direct image-model prompts |
 | `judge/s_*`, `traj_user.md` | every judge prompt |
 | `README.md` | index mapping prompts to the paper's figures |

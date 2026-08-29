@@ -10,7 +10,7 @@
       "adapter": "closed_html",
       "served_model": "gpt-5.5",
       "settings": [
-        "WM-Markov",
+        "WM-NoHist",
         "WM-FullHist"
       ]
     },
@@ -20,7 +20,7 @@
       "served_model": "code2world",
       "endpoint_env": "CODE2WORLD_URL",
       "settings": [
-        "WM-Markov",
+        "WM-NoHist",
         "WM-FullHist"
       ]
     },
@@ -32,7 +32,7 @@
       "max_pixels": 1048576,
       "low_vram": true,
       "settings": [
-        "WM-Markov"
+        "WM-NoHist"
       ]
     }
   ]

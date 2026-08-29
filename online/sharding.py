@@ -23,8 +23,8 @@ def _load_json(path: Path) -> Any:
 
 
 def history_dir(setting: str) -> str:
-    if setting == "WM-Markov":
-        return "markov"
+    if setting == "WM-NoHist":
+        return "nohist"
     if setting == "WM-FullHist":
         return "fullhist"
     raise ValueError(f"unsupported history setting: {setting}")
@@ -142,7 +142,7 @@ def main() -> None:
     sub = parser.add_subparsers(dest="command", required=True)
     merge = sub.add_parser("merge", help="merge every shard")
     merge.add_argument("--model", required=True)
-    merge.add_argument("--setting", choices=["WM-Markov", "WM-FullHist"], required=True)
+    merge.add_argument("--setting", choices=["WM-NoHist", "WM-FullHist"], required=True)
     merge.add_argument("--tasks-file", default=str(ONLINE_SAMPLES_FILE))
     merge.add_argument("--output-root", required=True)
     merge.add_argument("--shard-count", type=int, required=True)

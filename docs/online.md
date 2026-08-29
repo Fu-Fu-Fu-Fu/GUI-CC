@@ -69,8 +69,8 @@ terminal action or when the task's step budget is exhausted, and progress is sco
 ordered milestones in the task definition.
 
 ```bash
-python -m online.rollout --model code2world --setting WM-Markov
-python -m online.cli --rollout-dir outputs/online/code2world/markov
+python -m online.rollout --model code2world --setting WM-NoHist
+python -m online.cli --rollout-dir outputs/online/code2world/nohist
 EVALUATE_AFTER_RUN=1 bash scripts/run_all_online.sh    # every configured row
 ```
 
@@ -121,7 +121,7 @@ configured row into `outputs/results/online.{json,csv}`.
 ### 5. Output layout
 
 ```text
-outputs/online/<model>/<markov|fullhist>/
+outputs/online/<model>/<nohist|fullhist>/
 ├── rollout_results.json          # _RUN configuration plus per-task records
 ├── <task_id>/
 │   ├── step_<000..>/             # frame.png, action.json, agent_response.txt, agent_evidence.json
@@ -144,7 +144,7 @@ directory per shard and merge deterministically at the end. Sharding is round-ro
 ```bash
 for i in 0 1; do
   CUDA_VISIBLE_DEVICES=$i python -m online.rollout \
-    --model code2world --setting WM-Markov \
+    --model code2world --setting WM-NoHist \
     --output-root outputs/online \
     --shard-count 2 --shard-index $i &
 done
@@ -158,12 +158,12 @@ same command after an interruption skips finished tasks.
 
 ```bash
 python -m online.sharding merge \
-  --model code2world --setting WM-Markov \
+  --model code2world --setting WM-NoHist \
   --output-root outputs/online --shard-count 2
 ```
 
 The merge verifies that every shard's run configuration agrees and that each task was produced by
 exactly one shard with complete artifacts (the per-step `step_<000..>/` directories and
 `final_frame.png`). It then atomically publishes the task directories and the merged
-`rollout_results.json` into `outputs/online/<model>/<markov|fullhist>/`, refusing to overwrite an
+`rollout_results.json` into `outputs/online/<model>/<nohist|fullhist>/`, refusing to overwrite an
 existing target. Only the merged directory is handed to the evaluator.

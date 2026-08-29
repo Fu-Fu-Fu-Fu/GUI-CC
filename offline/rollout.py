@@ -165,7 +165,7 @@ def main() -> None:
     config = load_project_json(OFFLINE_CONFIG)
     parser = argparse.ArgumentParser(description="Generate GUI-CC offline rollout predictions")
     parser.add_argument("--model", required=True)
-    parser.add_argument("--setting", choices=["WM-Markov", "WM-FullHist"], required=True)
+    parser.add_argument("--setting", choices=["WM-NoHist", "WM-FullHist"], required=True)
     parser.add_argument("--sample-ids", help="generate only these samples (comma separated); default is all 500")
     parser.add_argument("--subset", type=int, metavar="N",
                         help="generate only the fixed evenly spaced subset of N samples (identical across models; see utils/subset.py)")
@@ -221,7 +221,7 @@ def main() -> None:
     run = _run_record(spec, args.setting, args.endpoint, args.device, history_window)
     if shard_enabled:
         run["execution"] = {"mode": "sharded", "shard_count": args.shard_count}
-    history_dir = "fullhist" if args.setting == "WM-FullHist" else "markov"
+    history_dir = "fullhist" if args.setting == "WM-FullHist" else "nohist"
     config_dir = output_root / args.model / history_dir
     _validate_output_namespace(config_dir, run)
     if shard_enabled:

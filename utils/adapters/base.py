@@ -8,8 +8,11 @@ in order:
   4. renders that HTML to PNG through Playwright;
   5. reuses a cached result only when the full model request is identical.
 
-These world models are trained in a Markov fashion. Full-History (+H) is an extension that
-prepends the previous three (state, action) pairs as additional context.
+The two history settings describe what the harness feeds the model at each step, not a property
+of the model itself. Under ``WM-NoHist`` the adapter receives only the current screen and the
+current action; under ``WM-FullHist`` it additionally receives the configured window of recent
+(state, action) pairs. A model that maintains cross-step state on its own should be evaluated
+under ``WM-NoHist`` and keep that state inside its adapter instance.
 """
 from __future__ import annotations
 
@@ -80,12 +83,12 @@ class BaseWMAdapter:
     render_name: str | None = None
     served_model_name: str = "base"
     base_url: str = ""
-    history_setting: str = "WM-Markov"  # 也可以是 "WM-FullHist"
+    history_setting: str = "WM-NoHist"  # 也可以是 "WM-FullHist"
     # `name` 标识配置中的模型及输出；`render_name` 标识兼容的 HTML renderer，
     # 其取值为 code2world、gworld 或 mobileworld。
 
     def __init__(self, base_url: str, served_model_name: str,
-                 persist_root: str, history_setting: str = "WM-Markov",
+                 persist_root: str, history_setting: str = "WM-NoHist",
                  max_tokens: int = 8192, temperature: float = 0.0,
                  retries: int = 2, timeout: float = 600.0,
                  hist_window: int = 3, output_name: str | None = None):
@@ -95,7 +98,7 @@ class BaseWMAdapter:
         self.render_name = self.render_name or self.name
         if output_name:
             self.name = output_name
-        history_dir = "fullhist" if history_setting == "WM-FullHist" else "markov"
+        history_dir = "fullhist" if history_setting == "WM-FullHist" else "nohist"
         self.persist_root = Path(persist_root) / self.name / history_dir
         self.persist_root.mkdir(parents=True, exist_ok=True)
         self.max_tokens = max_tokens

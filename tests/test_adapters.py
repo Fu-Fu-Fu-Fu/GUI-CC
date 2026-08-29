@@ -84,8 +84,8 @@ class ClosedModelPromptTest(unittest.TestCase):
         adapter.hist_window = 3
         return adapter
 
-    def test_markov使用figure9_prompt和原始尺寸(self) -> None:
-        adapter = self._adapter("WM-Markov")
+    def test_nohist使用figure9_prompt和原始尺寸(self) -> None:
+        adapter = self._adapter("WM-NoHist")
         messages = adapter.build_messages(
             np.zeros((120, 80, 3), dtype=np.uint8),
             {"type": "tap", "target": "Save", "source_coord": [10, 20]},

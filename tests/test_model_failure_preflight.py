@@ -79,14 +79,14 @@ class OfflineEvaluatorFailurePolicyTest(unittest.TestCase):
             encoding="utf-8",
         )
 
-        config_dir = pred_root / "mobileworld" / "markov"
+        config_dir = pred_root / "mobileworld" / "nohist"
         run_sha256 = "run-sha256"
         _write_json(config_dir / "run.json", {
             "schema": "gui_cc_offline_rollout",
             "run_sha256": run_sha256,
             "model": {
                 "model_id": "mobileworld",
-                "history_setting": "WM-Markov",
+                "history_setting": "WM-NoHist",
             },
         })
         step_dir = config_dir / "sample" / "step_000"
@@ -165,7 +165,7 @@ class OfflineEvaluatorFailurePolicyTest(unittest.TestCase):
         _write_json(config_dir / "summary.json", {"samples": {"sample": record}})
         return SimpleNamespace(
             model="mobileworld",
-            setting="WM-Markov",
+            setting="WM-NoHist",
             sample_ids="sample",
             subset=None,
             dry_run=True,

@@ -50,7 +50,7 @@ class ClosedModelAdapter(Code2WorldAdapter):
         if name_override:
             self.name = name_override
             history_dir = (
-                "fullhist" if self.history_setting == "WM-FullHist" else "markov")
+                "fullhist" if self.history_setting == "WM-FullHist" else "nohist")
             self.persist_root = Path(persist_root) / self.name / history_dir
             self.persist_root.mkdir(parents=True, exist_ok=True)
         client_kwargs = {"api_key": api_key, "timeout": kwargs.get("timeout", 120.0)}

@@ -39,7 +39,7 @@ def _matrix(split: str) -> list[tuple[str, str]]:
 
 
 def _hist(setting: str) -> str:
-    return "fullhist" if setting == "WM-FullHist" else "markov"
+    return "fullhist" if setting == "WM-FullHist" else "nohist"
 
 
 def add_usage(value: Any, total: dict[str, int]) -> None:

@@ -10,9 +10,9 @@ cd "$ROOT"
 
 MODEL="${1:-}"
 PHASE="${2:-offline}"
-SETTING="${3:-WM-Markov}"
+SETTING="${3:-WM-NoHist}"
 if [[ -z "$MODEL" ]]; then
-  echo "Usage: $0 <code2world> <offline|online> <WM-Markov|WM-FullHist> [runner args...]" >&2
+  echo "Usage: $0 <code2world> <offline|online> <WM-NoHist|WM-FullHist> [runner args...]" >&2
   exit 2
 fi
 shift $(( $# >= 3 ? 3 : $# ))
@@ -22,9 +22,9 @@ case "$MODEL" in
   *) echo "ERROR: unsupported vLLM model: $MODEL" >&2; exit 2 ;;
 esac
 case "$PHASE" in offline|online) ;; *) echo "ERROR: phase must be offline or online" >&2; exit 2 ;; esac
-case "$SETTING" in WM-Markov|WM-FullHist) ;; *) echo "ERROR: invalid setting: $SETTING" >&2; exit 2 ;; esac
+case "$SETTING" in WM-NoHist|WM-FullHist) ;; *) echo "ERROR: invalid setting: $SETTING" >&2; exit 2 ;; esac
 
-HISTORY_DIR=markov
+HISTORY_DIR=nohist
 [[ "$SETTING" == WM-FullHist ]] && HISTORY_DIR=fullhist
 LOG_DIR="$ROOT/outputs/logs/vllm_jobs/${MODEL}/${HISTORY_DIR}"
 mkdir -p "$LOG_DIR"

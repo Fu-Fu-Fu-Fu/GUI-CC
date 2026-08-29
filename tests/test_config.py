@@ -35,7 +35,7 @@ class ExperimentConfigTest(unittest.TestCase):
         }
         for model_id, (seed, steps) in expected.items():
             resolved = resolved_model_config(
-                get_model_spec(config, model_id), "WM-Markov"
+                get_model_spec(config, model_id), "WM-NoHist"
             )
             self.assertEqual((resolved["seed"], resolved["num_steps"]), (seed, steps))
 
@@ -62,7 +62,7 @@ class ExperimentConfigTest(unittest.TestCase):
         config = load_project_json(OFFLINE_CONFIG)
         spec = get_model_spec(config, "code2world")
         with TemporaryDirectory() as output_root:
-            adapter = create_adapter(spec, output_root, "WM-Markov")
+            adapter = create_adapter(spec, output_root, "WM-NoHist")
         self.assertEqual(adapter.name, "code2world")
         self.assertEqual(adapter.render_name, "code2world")
 

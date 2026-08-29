@@ -25,7 +25,7 @@ for row in "${MATRIX[@]}"; do
   "$PYTHON_BIN" -m online.rollout --model "$model" --setting "$setting" \
     ${SUBSET:+--subset "$SUBSET"} "$@"
   if [[ "${EVALUATE_AFTER_RUN:-0}" == "1" ]]; then
-    history_dir=markov
+    history_dir=nohist
     [[ "$setting" == WM-FullHist ]] && history_dir=fullhist
     "$PYTHON_BIN" -m online.cli --rollout-dir "$ROOT/outputs/online/$model/$history_dir" \
       ${SUBSET:+--subset "$SUBSET"}

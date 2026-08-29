@@ -90,7 +90,7 @@ def _patch_siglip_import():
 class QwenImageEditAdapter(BaseDiffusionAdapter):
     name = "qwen_image_edit"
 
-    def __init__(self, persist_root: str, history_setting: str = "WM-Markov",
+    def __init__(self, persist_root: str, history_setting: str = "WM-NoHist",
                  device: str = "cuda", seed: int = 42, num_steps: int = 40,
                  low_vram: bool = False, max_pixels: int = DEFAULT_MAX_PIXELS,
                  flat_output: bool = False):

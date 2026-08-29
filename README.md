@@ -155,22 +155,22 @@ a trial run is cheap and its results are reused by the full run.
 ```bash
 bash scripts/serve.sh code2world                 # local vLLM on port 4244
 
-python -m offline.rollout --model code2world --setting WM-Markov --subset 10
-python -m offline.cli     --model code2world --setting WM-Markov --subset 10
+python -m offline.rollout --model code2world --setting WM-NoHist --subset 10
+python -m offline.cli     --model code2world --setting WM-NoHist --subset 10
 ```
 
 ### Example 2: Qwen-Image-Edit-2511 (direct image output)
 
 ```bash
-python -m offline.rollout --model qwen_image_edit --setting WM-Markov --subset 10
-python -m offline.cli     --model qwen_image_edit --setting WM-Markov --subset 10
+python -m offline.rollout --model qwen_image_edit --setting WM-NoHist --subset 10
+python -m offline.cli     --model qwen_image_edit --setting WM-NoHist --subset 10
 ```
 
 ### Example 3: online agent loop
 
 ```bash
-python -m online.rollout --model code2world --setting WM-Markov --subset 10
-python -m online.cli --rollout-dir outputs/online/code2world/markov --subset 10
+python -m online.rollout --model code2world --setting WM-NoHist --subset 10
+python -m online.cli --rollout-dir outputs/online/code2world/nohist --subset 10
 ```
 
 ### Swapping the judge and the agent
@@ -178,10 +178,10 @@ python -m online.cli --rollout-dir outputs/online/code2world/markov --subset 10
 Both default to the model reported in the paper and are overridable at the command line:
 
 ```bash
-python -m offline.cli --model code2world --setting WM-Markov \
+python -m offline.cli --model code2world --setting WM-NoHist \
     --judge-model qwen3.7-plus --base-url https://your-endpoint/v1
 
-python -m online.rollout --model code2world --setting WM-Markov \
+python -m online.rollout --model code2world --setting WM-NoHist \
     --planner-model gpt-5.5 --planner-url https://your-endpoint/v1
 ```
 
@@ -229,8 +229,8 @@ Offline reports ten metrics, online reports six. All are normalized to `[0, 1]` 
 they need no API and can be computed on their own:
 
 ```bash
-python scripts/run_offline_local_metrics.py --model code2world --setting WM-Markov
-python scripts/run_offline_local_metrics.py --model code2world --setting WM-Markov --subset 10
+python scripts/run_offline_local_metrics.py --model code2world --setting WM-NoHist
+python scripts/run_offline_local_metrics.py --model code2world --setting WM-NoHist --subset 10
 ```
 
 Samples without a finished rollout are skipped and reported, so this works on a partial run.
@@ -250,7 +250,7 @@ world model under test.
 override an existing row:
 
 ```bash
-python -m offline.rollout --model gpt55 --setting WM-Markov \
+python -m offline.rollout --model gpt55 --setting WM-NoHist \
     --served-model your-model-name --endpoint https://your-endpoint/v1 \
     --output-root outputs/offline/predictions
 ```
@@ -266,6 +266,28 @@ python -m offline.rollout --model gpt55 --setting WM-Markov \
 `code2world_adapter.py` and `qwen_image_edit_adapter.py` are the reference implementations. The base
 classes already handle request fingerprinting, caching, resizing back to the sample's native
 resolution, and failure attribution.
+
+### If your world model is natively multi-step
+
+The two settings describe **what the harness feeds the model at each step, not what the model is**:
+
+| Setting | The harness passes |
+|---|---|
+| `WM-NoHist` | only the current screen and the current action |
+| `WM-FullHist` | additionally, the configured window of recent (state, action) pairs |
+
+Every world model evaluated in the paper consumes one step at a time, so `WM-FullHist` exists as a
+harness-side condition that supplies the context those models cannot carry themselves. It is a
+control, not a claim about the model.
+
+If your model already carries state across steps, do not use `WM-FullHist` to simulate that. Run it
+under `WM-NoHist` and let it work the way it was designed: the harness calls `predict()` once per
+step in trajectory order on the same adapter instance, so your adapter can keep whatever state it
+needs on `self` (a KV cache, a running summary, a session handle) and ignore the `history` argument.
+That is the more faithful evaluation, and it is what the benchmark is meant to measure.
+
+Declare only the settings you support in `utils/configs/{offline,online}.json`; a model that needs
+just one row lists a single entry in `settings`.
 
 ## 📄 Citation
 

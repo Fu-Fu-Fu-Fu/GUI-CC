@@ -51,7 +51,7 @@ def _matrix(name: str) -> list[tuple[str, str]]:
 
 
 def _history_dir(setting: str) -> str:
-    return "fullhist" if setting == "WM-FullHist" else "markov"
+    return "fullhist" if setting == "WM-FullHist" else "nohist"
 
 
 def _offline_rows(output_root: Path) -> list[dict]:

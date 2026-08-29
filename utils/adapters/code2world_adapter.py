@@ -13,8 +13,9 @@ The action description reproduces the ``T3A.step`` output of DiffSynth-Studio/Co
 Visual annotation follows Code2World's ``wm_utils.py``: a red circle for tap/long_press and a
 red arrow for scroll.
 
-The model is trained in a Markov fashion only; +H is an extension that prepends the previous
-(image, action_text) turns as additional user/assistant messages.
+Code2World consumes one step at a time, so under ``WM-FullHist`` this adapter prepends the
+previous (image, action_text) turns as additional user/assistant messages. That is a harness-side
+extension, not something the model was trained with.
 """
 from __future__ import annotations
 
@@ -84,7 +85,7 @@ class Code2WorldAdapter(BaseWMAdapter):
         desc = build_semantic_desc_official(semantic_action)
         user_text = CODE2WORLD_USER_TEMPLATE.format(semantic_desc=desc)
 
-        # Markov 路径保持原始行为，不附加历史。
+        # No-history path: keep the original single-step behaviour.
         if self.history_setting != "WM-FullHist" or not history:
             return [
                 {"role": "system", "content": [{"type": "text", "text": CODE2WORLD_SYSTEM_PROMPT}]},

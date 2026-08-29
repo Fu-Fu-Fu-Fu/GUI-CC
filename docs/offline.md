@@ -73,16 +73,23 @@ The world model predicts the next GUI screenshot for each retained semantic acti
 `initial.png` as input; every later step takes the model's own previous prediction. The reference
 action sequence is fixed throughout. Two history settings are supported:
 
-- `WM-Markov`: conditions only on the current screen and the current action.
-- `WM-FullHist`: additionally receives the configured window of recent interaction history.
+- `WM-NoHist`: the harness passes only the current screen and the current action.
+- `WM-FullHist`: the harness additionally passes the configured window of recent interaction
+  history.
+
+These settings describe what the harness supplies, not a property of the model. Every world model
+evaluated in the paper consumes one step at a time, so `WM-FullHist` is a harness-side control that
+supplies context those models cannot carry themselves. A model that maintains its own cross-step
+state should be run under `WM-NoHist`, keeping that state inside its adapter instance; the harness
+calls it once per step in trajectory order.
 
 HTML/code world models and image/diffusion world models share the same sample set and evaluator but
 differ in inference adapter and output artifact. The implementation lives in `offline/` and
 `utils/adapters/`; the prompts live in `utils/prompts/`.
 
 ```bash
-python -m offline.rollout --model code2world --setting WM-Markov
-python -m offline.cli     --model code2world --setting WM-Markov
+python -m offline.rollout --model code2world --setting WM-NoHist
+python -m offline.cli     --model code2world --setting WM-NoHist
 EVALUATE_AFTER_RUN=1 bash scripts/run_all_offline.sh   # every configured row
 ```
 
@@ -116,7 +123,7 @@ The judge model comes from `judge_model` in `utils/configs/offline.json` and can
 the `VISUAL_SIM_*` environment variables). To compute only those two, without any API call:
 
 ```bash
-python scripts/run_offline_local_metrics.py --model code2world --setting WM-Markov
+python scripts/run_offline_local_metrics.py --model code2world --setting WM-NoHist
 ```
 
 ### 3. Failure attribution and aggregation
@@ -140,11 +147,11 @@ configured row into `outputs/results/offline.{json,csv}`.
 
 ```text
 outputs/offline/
-├── predictions/<model>/<markov|fullhist>/
+├── predictions/<model>/<nohist|fullhist>/
 │   ├── run.json              # model configuration and commit for this rollout
 │   ├── summary.json          # per-sample completion and failure records
 │   └── <sample_id>/step_*/pred.png ...
-└── evaluation/<model>/<markov|fullhist>/
+└── evaluation/<model>/<nohist|fullhist>/
     ├── _preflight.json
     ├── _results.json
     ├── _aggregate.json
@@ -188,7 +195,7 @@ One process per shard (four shards, one GPU each):
 ```bash
 for i in 0 1 2 3; do
   CUDA_VISIBLE_DEVICES=$i python -m offline.rollout \
-    --model qwen_image_edit --setting WM-Markov \
+    --model qwen_image_edit --setting WM-NoHist \
     --shard-count 4 --shard-index $i &
 done
 wait
@@ -201,11 +208,11 @@ isolated from the others. Rerunning the same command after an interruption skips
 
 ```bash
 python -m offline.sharding merge \
-  --model qwen_image_edit --setting WM-Markov --shard-count 4
+  --model qwen_image_edit --setting WM-NoHist --shard-count 4
 ```
 
 The merge verifies that every shard's run configuration agrees, that each sample was produced by
 exactly one shard, and that its `pred.png` files are complete. It then atomically publishes the
 sample directories together with `run.json` and `summary.json` into
-`outputs/offline/predictions/<model>/<markov|fullhist>/`, refusing to overwrite an existing target.
+`outputs/offline/predictions/<model>/<nohist|fullhist>/`, refusing to overwrite an existing target.
 Only the merged directory is handed to the evaluator.

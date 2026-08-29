@@ -69,7 +69,7 @@ class ProjectLayoutTest(unittest.TestCase):
     def test_结果汇总拒绝目录与offline模型身份不一致(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            path = root / "offline/evaluation/code2world/markov/_aggregate.json"
+            path = root / "offline/evaluation/code2world/nohist/_aggregate.json"
             path.parent.mkdir(parents=True)
             path.write_text(json.dumps({
                 "schema": "gui_cc_offline_evaluation",
@@ -77,7 +77,7 @@ class ProjectLayoutTest(unittest.TestCase):
                 "scope": "full",
                 "wm": "gworld",
             }), encoding="utf-8")
-            with patch("scripts.collect_results._matrix", return_value=[("code2world", "WM-Markov")]):
+            with patch("scripts.collect_results._matrix", return_value=[("code2world", "WM-NoHist")]):
                 with self.assertRaisesRegex(ValueError, "does not match the directory"):
                     _offline_rows(root)
 
@@ -91,7 +91,7 @@ class ProjectLayoutTest(unittest.TestCase):
         ]
         rollout = {
             "schema": "gui_cc_online_rollout",
-            "model": {"model_id": "gworld", "history_setting": "WM-Markov"},
+            "model": {"model_id": "gworld", "history_setting": "WM-NoHist"},
             "planner": {"model": "gpt-5.5-0424-global"},
         }
         rollout["run_sha256"] = hashlib.sha256(
@@ -99,7 +99,7 @@ class ProjectLayoutTest(unittest.TestCase):
         ).hexdigest()
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            path = root / "online/code2world/markov/evaluation_results.json"
+            path = root / "online/code2world/nohist/evaluation_results.json"
             path.parent.mkdir(parents=True)
             path.write_text(json.dumps({
                 "run": {
@@ -115,7 +115,7 @@ class ProjectLayoutTest(unittest.TestCase):
                 "tasks": {task_id: {} for task_id in task_ids},
                 "aggregate": {"status": "complete"},
             }), encoding="utf-8")
-            with patch("scripts.collect_results._matrix", return_value=[("code2world", "WM-Markov")]):
+            with patch("scripts.collect_results._matrix", return_value=[("code2world", "WM-NoHist")]):
                 with self.assertRaisesRegex(ValueError, "does not match the directory"):
                     _online_rows(root)
 

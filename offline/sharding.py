@@ -23,8 +23,8 @@ _CONFIG = load_project_json(OFFLINE_CONFIG)
 
 
 def history_dir(setting: str) -> str:
-    if setting == "WM-Markov":
-        return "markov"
+    if setting == "WM-NoHist":
+        return "nohist"
     if setting == "WM-FullHist":
         return "fullhist"
     raise ValueError(f"unsupported history setting: {setting}")
@@ -163,7 +163,7 @@ def _arguments() -> argparse.Namespace:
         choices=[str(spec["id"]) for spec in _CONFIG.get("models", [])],
         required=True,
     )
-    merge.add_argument("--setting", choices=["WM-Markov", "WM-FullHist"], required=True)
+    merge.add_argument("--setting", choices=["WM-NoHist", "WM-FullHist"], required=True)
     merge.add_argument("--samples", default=str(OFFLINE_SAMPLES_FILE))
     merge.add_argument("--output-root", default=str(OFFLINE_PREDICTIONS_ROOT))
     merge.add_argument("--shard-count", type=int, required=True)
