@@ -1,0 +1,39 @@
+{
+  "schema": "gui_cc_online",
+  "planner_model": "gpt-5.5",
+  "planner_max_tokens": 4096,
+  "judge_model": "gpt-5.5",
+  "history_window": 3,
+  "models": [
+    {
+      "id": "gpt55",
+      "adapter": "closed_html",
+      "served_model": "gpt-5.5",
+      "settings": [
+        "WM-Markov",
+        "WM-FullHist"
+      ]
+    },
+    {
+      "id": "code2world",
+      "adapter": "code2world",
+      "served_model": "code2world",
+      "endpoint_env": "CODE2WORLD_URL",
+      "settings": [
+        "WM-Markov",
+        "WM-FullHist"
+      ]
+    },
+    {
+      "id": "qwen_image_edit",
+      "adapter": "qwen_image_edit",
+      "seed": 42,
+      "num_steps": 40,
+      "max_pixels": 1048576,
+      "low_vram": true,
+      "settings": [
+        "WM-Markov"
+      ]
+    }
+  ]
+}

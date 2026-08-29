@@ -1,0 +1,44 @@
+# GUI-CC unified environment. One env runs everything: rollout, vLLM serving,
+# generation adapters, and evaluation.
+#
+#   conda create -n gui-cc python=3.12 pip
+#   conda activate gui-cc
+#   pip install -r requirements.txt
+#   playwright install chromium
+#
+# All packages float to their latest versions except the vLLM/torch pair:
+# vLLM >= 0.27 requires torch 2.13 + CUDA 13 (NVIDIA driver >= 580).
+# vLLM 0.26.0 is the newest release on the CUDA 12 stack (it pins torch 2.11);
+# the +cu129 builds below run on any driver from the 570 series (CUDA 12.8,
+# via minor-version compatibility) up, including CUDA 13 drivers.
+--extra-index-url https://download.pytorch.org/whl/cu129
+--extra-index-url https://wheels.vllm.ai/568afb3a13806beb53bb2e6bd518269357b237c0/cu129
+
+torch==2.11.0+cu129
+torchvision==0.26.0+cu129
+torchaudio==2.11.0+cu129
+vllm==0.26.0+cu129
+
+# Evaluation stack
+accelerate
+diffusers
+numpy
+openai
+opencv-python-headless
+Pillow
+playwright
+pytest
+safetensors
+transformers
+
+# Generation adapters (DiffSynth-Studio runtime dependencies)
+einops
+imageio[ffmpeg]
+sentencepiece
+protobuf
+ftfy
+pandas
+peft
+datasets
+modelscope
+pytorch_lightning  # ViMo checkpoint is a Lightning pickle; torch.load needs it importable

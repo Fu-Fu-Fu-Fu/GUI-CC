@@ -1,0 +1,1 @@
+<image> Predict the next page state via HTML code from this current screenshot using action description "{action_description}" and action target "{action_target}" and relative coordinates "{relative_coordinates}".

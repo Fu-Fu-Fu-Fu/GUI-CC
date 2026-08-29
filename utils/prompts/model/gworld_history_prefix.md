@@ -1,0 +1,1 @@
+You are also given the following ACTION HISTORY for cross-step consistency. Use the past states to keep entities, toggle states, navigation history, and persistent layouts consistent. The CURRENT screenshot, i.e., the last image with red action cue, is what you must predict the NEXT state for.

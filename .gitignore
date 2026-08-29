@@ -1,0 +1,16 @@
+# Machine-local configuration (never commit: contains endpoints and API keys)
+utils/configs/paths.env
+
+# The dataset lives on Hugging Face; download it into data/
+data/
+
+# Generated artifacts
+outputs/
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.cache/
+.coverage
+.venv/
