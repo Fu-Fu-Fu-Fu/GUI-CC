@@ -188,6 +188,17 @@ python -m online.rollout --model code2world --setting WM-Markov \
 Any OpenAI-compatible vision-language model works as the judge. Scores are comparable only within a
 single judge, so keep it fixed across every row of a table.
 
+Two things to watch when you change the judge:
+
+- **Reasoning models.** `--max-tokens` (default 4096, available on both `offline.cli` and
+  `online.cli`) is a safety ceiling on one reply, and reasoning tokens count against it. A judge
+  that thinks at length can spend the whole budget before emitting any content, which shows up as
+  `json_parse_failed` on every request. Raise it for such a judge.
+- **Provider-specific request fields.** No extra fields are sent by default. Some providers expose a
+  switch to skip a reasoning phase the judge does not need; set `JUDGE_EXTRA_BODY_JSON` in
+  `paths.env` to a JSON object to pass such fields through, for example
+  `JUDGE_EXTRA_BODY_JSON={"enable_thinking": false}`.
+
 Drop `--subset` to run the full 500 offline samples or 200 online tasks and produce the official
 `Overall` score. Then collect both tables:
 
@@ -219,7 +230,10 @@ they need no API and can be computed on their own:
 
 ```bash
 python scripts/run_offline_local_metrics.py --model code2world --setting WM-Markov
+python scripts/run_offline_local_metrics.py --model code2world --setting WM-Markov --subset 10
 ```
+
+Samples without a finished rollout are skipped and reported, so this works on a partial run.
 
 Every other metric is scored by a VLM judge with the frozen prompts in `utils/prompts/judge/`.
 

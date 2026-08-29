@@ -134,7 +134,7 @@ class OnlinePipelineTest(unittest.TestCase):
                     "terminated": True,
                 }],
             }
-            with self.assertRaisesRegex(ValueError, "必须相对于 rollout 目录"):
+            with self.assertRaisesRegex(ValueError, "must be relative to the rollout directory"):
                 build_trajectory(rollout_dir, task_id, rollout)
 
     def test_缺失rollout会导致硬失败(self) -> None:
@@ -147,7 +147,7 @@ class OnlinePipelineTest(unittest.TestCase):
                 "milestones": [],
             }
         }
-        with self.assertRaisesRegex(ValueError, "缺少 1 个必需的 rollout"):
+        with self.assertRaisesRegex(ValueError, "missing 1 required rollout"):
             validate_rollouts({}, task_defs, [task_id], ROOT / "outputs/online")
 
 

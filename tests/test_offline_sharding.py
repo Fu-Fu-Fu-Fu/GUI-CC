@@ -84,7 +84,7 @@ class MergeTest(unittest.TestCase):
             for sample_id in sample_ids:
                 self.assertTrue((final / sample_id / "step_000" / "pred.png").is_file())
             # 合并目录已存在时拒绝覆盖
-            with self.assertRaisesRegex(ValueError, "拒绝覆盖"):
+            with self.assertRaisesRegex(ValueError, "refusing to overwrite"):
                 merge_shards(
                     model="wm", setting="WM-Markov",
                     output_root=output_root, shard_count=2, samples_file=samples_file,
@@ -100,7 +100,7 @@ class MergeTest(unittest.TestCase):
             output_root = root / "out"
             self._build_shard(output_root, 0, 2, ["001"], run_a)
             self._build_shard(output_root, 1, 2, ["002"], run_b)
-            with self.assertRaisesRegex(ValueError, "不一致"):
+            with self.assertRaisesRegex(ValueError, "differs from the other shards"):
                 merge_shards(
                     model="wm", setting="WM-Markov",
                     output_root=output_root, shard_count=2, samples_file=samples_file,
@@ -111,7 +111,7 @@ class MergeTest(unittest.TestCase):
             output_root = root / "out"
             self._build_shard(output_root, 0, 2, ["001"], run_a)
             self._build_shard(output_root, 1, 2, [], run_a)
-            with self.assertRaisesRegex(ValueError, "缺失或未终结"):
+            with self.assertRaisesRegex(ValueError, "is missing or unfinished"):
                 merge_shards(
                     model="wm", setting="WM-Markov",
                     output_root=output_root, shard_count=2, samples_file=samples_file,

@@ -19,24 +19,24 @@ ONLINE_SAMPLES_FILE = ROOT / "data" / "online_samples.jsonl"
 
 def _check_image(path: Path, errors: list[str]) -> None:
     if not path.is_file():
-        errors.append(f"图片缺失：{path}")
+        errors.append(f"missing image: {path}")
         return
     try:
         with Image.open(path) as image:
             image.verify()
     except Exception as error:  # noqa: BLE001
-        errors.append(f"图片损坏：{path}: {error}")
+        errors.append(f"corrupt image: {path}: {error}")
 
 
 def validate_offline(errors: list[str]) -> None:
     samples = load_samples(OFFLINE_SAMPLES_FILE)
     if len(samples) != 500:
-        errors.append(f"offline_samples.jsonl 应有 500 个 sample，实际 {len(samples)}")
+        errors.append(f"offline_samples.jsonl should have 500 samples, found {len(samples)}")
     dirs = {p.name for p in OFFLINE_DATA_ROOT.iterdir() if p.is_dir()}
     if dirs != set(samples):
         errors.append(
-            f"offline_data 目录与 offline_samples.jsonl 不一致："
-            f"多出 {sorted(dirs - set(samples))[:3]}，缺少 {sorted(set(samples) - dirs)[:3]}"
+            f"offline_data does not match offline_samples.jsonl: "
+            f"extra {sorted(dirs - set(samples))[:3]}, missing {sorted(set(samples) - dirs)[:3]}"
         )
         return
     total_steps = 0
@@ -45,19 +45,19 @@ def validate_offline(errors: list[str]) -> None:
         try:
             reference = load_reference(sample_dir)
         except Exception as error:  # noqa: BLE001
-            errors.append(f"{sample_id}: reference trajectory 无法解析：{error}")
+            errors.append(f"{sample_id}: cannot parse the reference trajectory: {error}")
             continue
         if sample.get("n_steps") != len(reference):
-            errors.append(f"{sample_id}: n_steps={sample.get('n_steps')} 与轨迹行数 {len(reference)} 不一致")
+            errors.append(f"{sample_id}: n_steps={sample.get('n_steps')} does not match {len(reference)} trajectory lines")
         if [row.get("step_id") for row in reference] != list(range(len(reference))):
-            errors.append(f"{sample_id}: step_id 不连续")
+            errors.append(f"{sample_id}: step_id is not consecutive")
         _check_image(sample_dir / "initial.png", errors)
         for step, row in enumerate(reference):
             if not isinstance(row.get("semantic_action"), dict) or not row["semantic_action"].get("type"):
-                errors.append(f"{sample_id} step {step}: 缺少 semantic_action")
+                errors.append(f"{sample_id} step {step}: missing semantic_action")
             _check_image(sample_dir / f"step_{step:03d}_after.png", errors)
         total_steps += len(reference)
-    print(f"offline: {len(samples)} 个 sample，{total_steps} 个 transition")
+    print(f"offline: {len(samples)} samples, {total_steps} transitions")
 
 
 def validate_online(errors: list[str]) -> None:
@@ -68,22 +68,22 @@ def validate_online(errors: list[str]) -> None:
             if line.strip()
         ]
     except (OSError, json.JSONDecodeError) as error:
-        errors.append(f"online_samples.jsonl 无法解析：{error}")
+        errors.append(f"cannot parse online_samples.jsonl: {error}")
         return
     task_ids = [row.get("task_id") for row in rows]
     if len(rows) != 200:
-        errors.append(f"online_samples.jsonl 应有 200 个任务，实际 {len(rows)}")
+        errors.append(f"online_samples.jsonl should have 200 tasks, found {len(rows)}")
     if len(set(task_ids)) != len(task_ids):
-        errors.append("online_samples.jsonl 中存在重复 task_id")
+        errors.append("duplicate task_id in online_samples.jsonl")
     dirs = {p.name for p in ONLINE_DATA_ROOT.iterdir() if p.is_dir()}
     if dirs != set(task_ids):
         errors.append(
-            f"online_data 目录与 online_samples.jsonl 不一致："
-            f"多出 {sorted(dirs - set(task_ids))[:3]}，缺少 {sorted(set(task_ids) - dirs)[:3]}"
+            f"online_data does not match online_samples.jsonl: "
+            f"extra {sorted(dirs - set(task_ids))[:3]}, missing {sorted(set(task_ids) - dirs)[:3]}"
         )
     for task_id in task_ids:
         _check_image(ONLINE_DATA_ROOT / task_id / "initial.png", errors)
-    print(f"online: {len(rows)} 个任务")
+    print(f"online: {len(rows)} tasks")
 
 
 def main() -> int:
@@ -91,11 +91,11 @@ def main() -> int:
     validate_offline(errors)
     validate_online(errors)
     if errors:
-        print(f"\n{len(errors)} 个问题：")
+        print(f"\n{len(errors)} problem(s):")
         for error in errors[:50]:
             print(f"  - {error}")
         return 1
-    print("数据校验通过")
+    print("data validation passed")
     return 0
 
 

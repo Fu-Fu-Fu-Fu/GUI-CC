@@ -357,7 +357,7 @@ class OnlineEvaluateTest(unittest.TestCase):
             )
             self.assertIn(task_id, prepared)
             mismatched = dict(rollout, run_sha256="run-b")
-            with self.assertRaisesRegex(ValueError, "运行标识与 _RUN 不一致"):
+            with self.assertRaisesRegex(ValueError, "run identity does not match _RUN"):
                 prepare_tasks(
                     {task_id: task},
                     {"_RUN": run, task_id: mismatched},

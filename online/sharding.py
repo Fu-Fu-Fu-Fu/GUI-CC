@@ -19,7 +19,7 @@ def _load_json(path: Path) -> Any:
     try:
         return json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as error:
-        raise ValueError(f"JSON 缺失或损坏：{path}: {error}") from error
+        raise ValueError(f"missing or corrupt JSON: {path}: {error}") from error
 
 
 def history_dir(setting: str) -> str:
@@ -27,7 +27,7 @@ def history_dir(setting: str) -> str:
         return "markov"
     if setting == "WM-FullHist":
         return "fullhist"
-    raise ValueError(f"不支持的 history setting：{setting}")
+    raise ValueError(f"unsupported history setting: {setting}")
 
 
 def partition_task_ids(
@@ -35,10 +35,10 @@ def partition_task_ids(
 ) -> list[str]:
     """按任务序号做稳定轮询分片。"""
     if shard_count < 1:
-        raise ValueError("shard_count 必须为正整数")
+        raise ValueError("shard_count must be a positive integer")
     if not 0 <= shard_index < shard_count:
         raise ValueError(
-            f"shard_index 必须位于 [0, {shard_count})，实际为 {shard_index}"
+            f"shard_index must be in [0, {shard_count}), got {shard_index}"
         )
     return [
         task_id for position, task_id in enumerate(all_ids)
@@ -58,7 +58,7 @@ def shard_worker_root(
 
 
 def task_output_present(output_dir: Path, record: dict[str, Any]) -> bool:
-    """判定一个 rollout 记录是否已终结且盘上产物齐全（不校验哈希）。"""
+    """判定一个 rollout 记录是否已终结且盘上产物齐全（不校验哈希)。"""
     task_id = record.get("task_id")
     if not isinstance(task_id, str) or not task_id:
         return False
@@ -80,13 +80,13 @@ def merge_shards(
 ) -> Path:
     """把全部 shard 的产物按任务顺序合并到单一输出目录。"""
     if shard_count < 1:
-        raise ValueError("shard_count 必须为正整数")
+        raise ValueError("shard_count must be a positive integer")
     task_defs = load_task_definitions(tasks_file)
     all_ids = list(task_defs)
     history = history_dir(setting)
     final_dir = output_root / model / history
     if final_dir.exists():
-        raise ValueError(f"拒绝覆盖已有输出目录：{final_dir}；请使用新 --output-root")
+        raise ValueError(f"refusing to overwrite an existing output directory: {final_dir}; use a new --output-root")
 
     common_run: dict[str, Any] | None = None
     records: dict[str, dict[str, Any]] = {}
@@ -99,24 +99,24 @@ def merge_shards(
         results = _load_json(output_dir / "rollout_results.json")
         run = results.get("_RUN", {})
         if run.get("model", {}).get("model_id") != model:
-            raise ValueError(f"shard {index} 的 model 不一致")
+            raise ValueError(f"shard {index} has a mismatched model")
         if run.get("model", {}).get("history_setting") != setting:
-            raise ValueError(f"shard {index} 的 setting 不一致")
+            raise ValueError(f"shard {index} has a mismatched setting")
         if common_run is None:
             common_run = run
         elif run.get("run_sha256") != common_run.get("run_sha256"):
-            raise ValueError(f"shard {index} 的 run 配置与其他 shard 不一致")
+            raise ValueError(f"shard {index} has a run configuration that differs from the other shards")
         for task_id in partition_task_ids(all_ids, shard_count, index):
             record = results.get(task_id)
             if not isinstance(record, dict) or not task_output_present(output_dir, record):
-                raise ValueError(f"shard {index} 任务 {task_id} 缺失或未终结")
+                raise ValueError(f"shard {index} task {task_id} is missing or unfinished")
             records[task_id] = record
             shard_dirs[task_id] = output_dir
 
     assert common_run is not None
     missing = [task_id for task_id in all_ids if task_id not in records]
     if missing:
-        raise ValueError(f"合并后缺少任务：{missing[:3]}")
+        raise ValueError(f"tasks missing after merge: {missing[:3]}")
 
     final_dir.parent.mkdir(parents=True, exist_ok=True)
     staging = Path(tempfile.mkdtemp(prefix=f".{history}.merge.", dir=final_dir.parent))
@@ -127,7 +127,7 @@ def merge_shards(
         for task_id in all_ids:
             source = shard_dirs[task_id] / task_id
             if not source.is_dir():
-                raise ValueError(f"任务产物目录缺失：{source}")
+                raise ValueError(f"missing task artifact directory: {source}")
             shutil.copytree(source, staging / task_id, copy_function=shutil.copy2)
         os.replace(staging, final_dir)
     except BaseException:
@@ -138,9 +138,9 @@ def merge_shards(
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="合并 GUI-CC online rollout 独立分片")
+    parser = argparse.ArgumentParser(description="Merge independent GUI-CC online rollout shards")
     sub = parser.add_subparsers(dest="command", required=True)
-    merge = sub.add_parser("merge", help="合并全部 shard")
+    merge = sub.add_parser("merge", help="merge every shard")
     merge.add_argument("--model", required=True)
     merge.add_argument("--setting", choices=["WM-Markov", "WM-FullHist"], required=True)
     merge.add_argument("--tasks-file", default=str(ONLINE_SAMPLES_FILE))
@@ -154,7 +154,7 @@ def main() -> None:
         output_root=Path(args.output_root).expanduser().resolve(),
         shard_count=args.shard_count,
     )
-    print(f"Online shard merge 完成：{output}", flush=True)
+    print(f"Online shard merge complete: {output}", flush=True)
 
 
 if __name__ == "__main__":

@@ -214,7 +214,7 @@ def rollout_one_task(
         history.append({"before_arr": before, "semantic_action": action})
         current = next_frame
         if verbose:
-            print(f"[{task_id}] 步骤 {step + 1}：{action.get('type')}", flush=True)
+            print(f"[{task_id}] step {step + 1}：{action.get('type')}", flush=True)
 
     final_frame = task_dir / "final_frame.png"
     current.save(final_frame)
@@ -246,7 +246,7 @@ def _merge_result(path: Path, run: dict[str, Any], task_id: str, result: dict[st
         fcntl.flock(lock, fcntl.LOCK_EX)
         payload = _load_results(path)
         if payload and payload.get("_RUN", {}).get("run_sha256") != run["run_sha256"]:
-            raise RuntimeError("当前作业运行期间，rollout_results.json 已变更为另一次运行")
+            raise RuntimeError("rollout_results.json changed to a different run while this job was running")
         payload["_RUN"] = run
         payload[task_id] = result
         atomic_write_json(path, payload)
@@ -255,51 +255,51 @@ def _merge_result(path: Path, run: dict[str, Any], task_id: str, result: dict[st
 def _ensure_namespace(output_dir: Path, results_path: Path, run: dict[str, Any]) -> dict[str, Any]:
     if not results_path.exists():
         if output_dir.exists() and any(output_dir.iterdir()):
-            raise RuntimeError(f"拒绝使用未纳入记录的输出目录：{output_dir}")
+            raise RuntimeError(f"refusing to use an unrecorded output directory: {output_dir}")
         output_dir.mkdir(parents=True, exist_ok=True)
         atomic_write_json(results_path, {"_RUN": run})
         return {"_RUN": run}
     results = _load_results(results_path)
     if results.get("_RUN", {}).get("run_sha256") != run["run_sha256"]:
-        raise RuntimeError(f"{output_dir} 下的输出配置不匹配；请使用新的 --output-dir")
+        raise RuntimeError(f"{output_dir} holds output from a different configuration; use a new --output-dir")
     return results
 
 
 def main() -> None:
     config = load_project_json(ONLINE_CONFIG)
-    parser = argparse.ArgumentParser(description="运行 GUI-CC Online rollout")
+    parser = argparse.ArgumentParser(description="Run a GUI-CC online rollout")
     parser.add_argument("--model", required=True)
     parser.add_argument("--setting", choices=["WM-Markov", "WM-FullHist"], required=True)
-    parser.add_argument("--task-ids", help="只生成这些 task（逗号分隔）；缺省生成全部 200 个")
+    parser.add_argument("--task-ids", help="generate only these tasks (comma separated); default is all 200")
     parser.add_argument("--subset", type=int, metavar="N",
-                        help="只生成固定的 N 条小样本（等间距取样，所有模型相同；见 utils/subset.py）")
+                        help="generate only the fixed evenly spaced subset of N samples (identical across models; see utils/subset.py)")
     parser.add_argument("--output-dir")
     parser.add_argument(
         "--output-root",
-        help="Online 输出根目录；shard 模式会在其 .shards namespace 下写入",
+        help="root directory for online output; shard mode writes under its .shards namespace",
     )
-    parser.add_argument("--shard-count", type=int, help="并行独立分片数")
-    parser.add_argument("--shard-index", type=int, help="当前分片序号（从 0 开始）")
+    parser.add_argument("--shard-count", type=int, help="number of independent shards")
+    parser.add_argument("--shard-index", type=int, help="index of this shard (0-based)")
     parser.add_argument("--planner-url", default=env("OPENAI_BASE_URL", "https://api.openai.com/v1"))
     parser.add_argument("--planner-api-key", default=env("OPENAI_API_KEY"))
     parser.add_argument("--planner-model", default=config["planner_model"],
-                        help="驱动 agent 的 VLM；默认是论文使用的模型")
-    parser.add_argument("--endpoint", help="覆盖世界模型 API 端点")
+                        help="VLM driving the agent; defaults to the model reported in the paper")
+    parser.add_argument("--endpoint", help="override the world-model API endpoint")
     parser.add_argument("--served-model",
-                        help="覆盖 API 世界模型的模型名（没有论文所用闭源模型权限时换模型试跑）")
+                        help="override the served model name of an API world model")
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--force", action="store_true")
     parser.add_argument("--workers", type=int, default=8,
-                        help="并发跑的任务数；任务之间互相独立")
+                        help="tasks run in parallel; tasks are independent of each other")
     parser.add_argument("--quiet", action="store_true")
     args = parser.parse_args()
 
     history_window = int(config["history_window"])
     if not 1 <= history_window <= 3:
-        parser.error("utils/configs/online.json 中的 history_window 必须在 1 到 3 之间")
+        parser.error("history_window in utils/configs/online.json must be between 1 and 3")
     spec = get_model_spec(config, args.model)
     if args.setting not in spec["settings"]:
-        parser.error(f"{args.model} 未配置 {args.setting}")
+        parser.error(f"{args.model} does not have the setting {args.setting}")
     if args.served_model:
         spec["served_model" if "served_model" in spec else "model"] = args.served_model
     task_file = ONLINE_SAMPLES_FILE
@@ -308,11 +308,11 @@ def main() -> None:
     all_ids = list(task_defs)
     shard_enabled = args.shard_count is not None or args.shard_index is not None
     if shard_enabled and (args.shard_count is None or args.shard_index is None):
-        parser.error("--shard-count 与 --shard-index 必须同时使用")
+        parser.error("--shard-count and --shard-index must be used together")
     if shard_enabled and (args.task_ids or args.subset):
-        parser.error("shard 模式不能与 --task-ids/--subset 混用；分片必须基于完整任务集合")
+        parser.error("shard mode cannot be combined with --task-ids/--subset; sharding must cover the full task set")
     if shard_enabled and args.output_dir:
-        parser.error("shard 模式使用 --output-root，不接受 --output-dir")
+        parser.error("shard mode uses --output-root, not --output-dir")
     task_ids = select_task_ids(task_defs, _split_ids(args.task_ids))
     if args.subset:
         task_ids = subset_ids(all_ids, args.subset)
@@ -327,7 +327,7 @@ def main() -> None:
         except ValueError as error:
             parser.error(str(error))
         if not task_ids:
-            parser.error("当前 Online shard 没有任务；请减少 --shard-count")
+            parser.error("this online shard got no tasks; reduce --shard-count")
     history_dir = "fullhist" if args.setting == "WM-FullHist" else "markov"
     output_root = (
         Path(args.output_root).expanduser().resolve()
@@ -366,7 +366,7 @@ def main() -> None:
     results = _ensure_namespace(output_dir, results_path, run)
     if shard_enabled:
         print(
-            f"Online shard {args.shard_index}/{args.shard_count} 输出：{output_dir}",
+            f"Online shard {args.shard_index}/{args.shard_count} output: {output_dir}",
             flush=True,
         )
     wm = create_adapter(
@@ -375,7 +375,7 @@ def main() -> None:
         history_window=history_window,
     )
     def make_agent() -> PlannerAgent:
-        """每个任务一个 agent：它持有该任务的指令与动作历史，并发下不能共用。"""
+        """One agent per task: it holds that task's instruction and action history, so it cannot be shared."""
         return PlannerAgent(
             planner_base_url=args.planner_url,
             planner_model=args.planner_model,
@@ -421,7 +421,7 @@ def main() -> None:
                 return original_predict(*p_args, **p_kwargs)
 
         wm.predict = locked_predict
-        print(f"{args.model} 是本地图像模型：GPU 生成串行化，任务仍按 --workers 并发", flush=True)
+        print(f"{args.model}  is a local image model: GPU generation is serialized while tasks stay parallel", flush=True)
     workers = args.workers
 
     failed: list[str] = []
@@ -436,7 +436,7 @@ def main() -> None:
             if not result.get("complete"):
                 failed.append(task_id)
 
-    print(f"Online rollout {args.model}/{history_dir}：已完成 {len(task_ids) - len(failed)}/{len(task_ids)}")
+    print(f"Online rollout {args.model}/{history_dir}：done {len(task_ids) - len(failed)}/{len(task_ids)}")
     model_failed = [
         tid for tid in failed
         if results.get(tid, {}).get("failure_class") == "model"
@@ -447,11 +447,11 @@ def main() -> None:
     ]
     if infra_blocked:
         raise SystemExit(
-            f"{len(infra_blocked)} 个 Online 任务基础设施失败（INFRA_BLOCKED）；"
-            f"首个：{infra_blocked[0]}"
+            f"{len(infra_blocked)}  online task(s) hit an infrastructure failure (INFRA_BLOCKED); "
+            f"first: {infra_blocked[0]}"
         )
     if model_failed:
-        print(f"  其中 {len(model_failed)} 个任务模型失败（计入固定分母，不阻塞正式聚合）")
+        print(f"  of which {len(model_failed)} task(s) failed on the model side (scored 0 in the fixed denominator, not blocking)")
 
 
 if __name__ == "__main__":

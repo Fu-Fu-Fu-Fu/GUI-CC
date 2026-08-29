@@ -182,7 +182,7 @@ def main() -> None:
         row = (_offline_row if args.split == "offline" else _online_row)(output_root, model, setting, ids)
         if row is None:
             continue
-        # 子集里还有样本没评完时不报分数，只报计数：部分平均值会误导。
+        # Do not report scores while samples in the subset are unevaluated: a partial mean misleads.
         values = [row["metrics"][metric] for metric in metrics]
         complete = row["evaluation"]["missing"] == 0 and all(value is not None for value in values)
         rows.append([
@@ -195,19 +195,19 @@ def main() -> None:
         notes.append((f"{model}/{_hist(setting)}", row))
 
     if not rows:
-        print("没有任何输出目录；先用 --subset N 跑 rollout 与评测。")
+        print("no output directory found; run rollout and evaluation with --subset N first.")
         return
     widths = [max(len(str(line[i])) for line in [header, *rows]) for i in range(len(header))]
     for line in [header, *rows]:
         print("  ".join(str(cell).ljust(width) for cell, width in zip(line, widths)))
 
-    print("\nAPI 开销（实测 -> 按已跑完的样本数线性外推到全量）")
+    print("\nAPI cost (measured, extrapolated linearly from the samples actually finished)")
     for name, row in notes:
-        # 子集没跑完时按实际跑完的样本数外推，而不是按 N。
+        # Extrapolate from the samples actually finished rather than from N.
         n_rollout = row["rollout"]["complete"] + row["rollout"]["model_failed"]
         n_eval = row["evaluation"]["scored"] + row["evaluation"]["zeroed"]
-        print(f"- {name}: rollout 墙钟 {row['wallclock_s'] / 60:.1f} min"
-              f"（rollout {n_rollout} 条、评测 {n_eval} 条）")
+        print(f"- {name}: rollout wall clock {row['wallclock_s'] / 60:.1f} min"
+              f" (rollout {n_rollout} rows, evaluation {n_eval} rows)")
         for label in ("usage_planner", "usage_rollout", "usage_judge"):
             if label in row:
                 n_done = n_eval if label == "usage_judge" else n_rollout

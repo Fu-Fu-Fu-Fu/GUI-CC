@@ -17,7 +17,7 @@ from online.scoring import (
     prepare_tasks,
 )
 from online.trajectory import ONLINE_SAMPLES_FILE, load_task_definitions, select_task_ids
-from online.judges import REQUEST_TIMEOUT
+from online.judges import DEFAULT_MAX_TOKENS, REQUEST_TIMEOUT
 from utils.io import atomic_write_json
 from utils.subset import subset_ids
 
@@ -62,18 +62,21 @@ def _failed_rollout_result(task_id: str, rollout: dict) -> dict:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="使用 GPT-5.5 评测 GUI-CC Online rollout。")
+    parser = argparse.ArgumentParser(description="Evaluate a GUI-CC online rollout.")
     parser.add_argument("--rollout-dir", required=True)
-    parser.add_argument("--task-ids", help="只评测这些 task（逗号分隔）；缺省评测全部 200 个")
+    parser.add_argument("--task-ids", help="evaluate only these tasks (comma separated); default is all 200")
     parser.add_argument("--subset", type=int, metavar="N",
-                        help="只评测固定的 N 条小样本（等间距取样，所有模型相同；见 utils/subset.py）")
-    parser.add_argument("--tasks-json", help="任务定义（默认：data/online_samples.jsonl）")
+                        help="evaluate only the fixed evenly spaced subset of N tasks (identical across models; see utils/subset.py)")
+    parser.add_argument("--tasks-json", help="task definitions (default: data/online_samples.jsonl)")
     parser.add_argument("--api-key", default=env("OPENAI_API_KEY"))
     parser.add_argument("--base-url", default=env("OPENAI_BASE_URL", "https://api.openai.com/v1"))
     parser.add_argument("--parallel", type=int, default=8,
-                        help="并发评测的 task 数，即打向 judge API 的并发请求数")
+                        help="tasks evaluated in parallel, i.e. concurrent requests to the judge API")
     parser.add_argument("--judge-model", default=JUDGE_MODEL,
-                        help="打分用的 VLM；默认是论文使用的模型")
+                        help="VLM used for judging; defaults to the model reported in the paper")
+    parser.add_argument("--max-tokens", type=int, default=DEFAULT_MAX_TOKENS,
+                        help="safety ceiling for one judge reply; reasoning models spend this "
+                             "budget on reasoning tokens too, so raise it for such a judge")
     parser.add_argument("--force", action="store_true")
     return parser
 
@@ -81,18 +84,18 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: Optional[list[str]] = None) -> int:
     args = build_parser().parse_args(argv)
     if API_CLIENT is None and not args.api_key:
-        raise SystemExit("未设置 OPENAI_API_KEY")
+        raise SystemExit("OPENAI_API_KEY is not set")
 
     rollout_dir = Path(args.rollout_dir).expanduser().resolve()
     rollout_json = rollout_dir / "rollout_results.json"
     if not rollout_json.is_file():
-        raise SystemExit(f"找不到 {rollout_json}")
+        raise SystemExit(f"not found: {rollout_json}")
     try:
         rollouts = json.loads(rollout_json.read_text(encoding="utf-8"))
     except json.JSONDecodeError as error:
-        raise SystemExit(f"rollout JSON 无效：{error}") from error
+        raise SystemExit(f"invalid rollout JSON: {error}") from error
     if not isinstance(rollouts, dict):
-        raise SystemExit("rollout_results.json 必须包含一个 JSON 对象")
+        raise SystemExit("rollout_results.json must contain a JSON object")
 
     tasks_path = Path(args.tasks_json).expanduser() if args.tasks_json else ONLINE_SAMPLES_FILE
     task_defs = load_task_definitions(tasks_path)
@@ -132,6 +135,7 @@ def main(argv: Optional[list[str]] = None) -> int:
         "n_requested": len(task_ids),
         "task_ids": task_ids,
         "judge_model": args.judge_model,
+        "max_tokens": args.max_tokens,
         "base_url": args.base_url,
         "rollout_dir": str(rollout_dir),
         "rollout": rollouts["_RUN"],
@@ -160,6 +164,7 @@ def main(argv: Optional[list[str]] = None) -> int:
         previous=previous,
         force=args.force,
         task_parallelism=args.parallel,
+        max_tokens=args.max_tokens,
         on_result=save_progress,
     )
     results = {**failed_rollout_results, **evaluated}
@@ -168,7 +173,7 @@ def main(argv: Optional[list[str]] = None) -> int:
     run["completed_at"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
     atomic_write_json(output_path, {"run": run, "tasks": results, "aggregate": aggregate})
     print(json.dumps(aggregate, indent=2, ensure_ascii=False))
-    print(f"输出：{output_path}")
+    print(f"written to {output_path}")
     return 0 if aggregate["status"] == "complete" else 1
 
 

@@ -32,7 +32,7 @@ class BudgetLimitTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "online_samples.jsonl"
             path.write_text(json.dumps(task) + "\n", encoding="utf-8")
-            with self.assertRaisesRegex(ValueError, "帧上限"):
+            with self.assertRaisesRegex(ValueError, "judge frame limit"):
                 load_task_definitions(path)
 
 

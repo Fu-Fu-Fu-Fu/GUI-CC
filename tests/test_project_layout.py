@@ -25,7 +25,7 @@ class ProjectLayoutTest(unittest.TestCase):
             check=False,
         )
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("收集完整的 GUI-CC 结果矩阵", result.stdout)
+        self.assertIn("Collect the complete GUI-CC result matrix", result.stdout)
 
     def test_offline数据是完整的500个样本(self) -> None:
         if not (ROOT / "data/offline_samples.jsonl").is_file():
@@ -78,7 +78,7 @@ class ProjectLayoutTest(unittest.TestCase):
                 "wm": "gworld",
             }), encoding="utf-8")
             with patch("scripts.collect_results._matrix", return_value=[("code2world", "WM-Markov")]):
-                with self.assertRaisesRegex(ValueError, "模型与目录不一致"):
+                with self.assertRaisesRegex(ValueError, "does not match the directory"):
                     _offline_rows(root)
 
     def test_结果汇总拒绝目录与online模型身份不一致(self) -> None:
@@ -116,7 +116,7 @@ class ProjectLayoutTest(unittest.TestCase):
                 "aggregate": {"status": "complete"},
             }), encoding="utf-8")
             with patch("scripts.collect_results._matrix", return_value=[("code2world", "WM-Markov")]):
-                with self.assertRaisesRegex(ValueError, "模型与目录不一致"):
+                with self.assertRaisesRegex(ValueError, "does not match the directory"):
                     _online_rows(root)
 
 

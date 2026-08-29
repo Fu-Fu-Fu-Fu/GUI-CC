@@ -21,7 +21,16 @@ ONLINE_METRICS = ("S_ad", "S_id", "S_use", "S_cp", "S_rd", "S_mp", "Overall")
 
 
 def _load(path: Path) -> dict:
-    value = json.loads(path.read_text(encoding="utf-8"))
+    try:
+        text = path.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        raise SystemExit(
+            f"missing evaluation result: {path}\n"
+            "collect_results.py only accepts a fully evaluated matrix. Run rollout and "
+            "evaluation for every row in utils/configs/{offline,online}.json first, or trim "
+            "that file to the rows you actually ran."
+        ) from None
+    value = json.loads(text)
     if not isinstance(value, dict):
         raise ValueError(f"expected a JSON object: {path}")
     return value
@@ -53,15 +62,15 @@ def _offline_rows(output_root: Path) -> list[dict]:
             / "_aggregate.json"
         )
         aggregate = _load(path)
-        _require(aggregate.get("complete") is True, "offline aggregate 不完整", path)
-        _require(aggregate.get("scope") == "full", "offline 结果不是完整评测", path)
-        _require(aggregate.get("wm") == model, "offline 模型与目录不一致", path)
-        _require(aggregate.get("setting") == setting, "offline setting 与目录不一致", path)
+        _require(aggregate.get("complete") is True, "offline aggregate is incomplete", path)
+        _require(aggregate.get("scope") == "full", "offline result is not a full evaluation", path)
+        _require(aggregate.get("wm") == model, "offline model does not match the directory", path)
+        _require(aggregate.get("setting") == setting, "offline setting does not match the directory", path)
         scores = aggregate.get("paper_scores")
         _require(
             isinstance(scores, dict)
             and all(isinstance(scores.get(metric), (int, float)) for metric in OFFLINE_METRICS),
-            "offline paper_scores 不完整",
+            "offline paper_scores is incomplete",
             path,
         )
         rows.append({"model": model, "setting": setting, **{
@@ -80,15 +89,15 @@ def _online_rows(output_root: Path) -> list[dict]:
         result = _load(path)
         run = result.get("run", {})
         aggregate = result.get("aggregate", {})
-        _require(run.get("mode") == "full", "online 结果不是完整评测", path)
-        _require(aggregate.get("status") == "complete", "online aggregate 未完成", path)
+        _require(run.get("mode") == "full", "online result is not a full evaluation", path)
+        _require(aggregate.get("status") == "complete", "online aggregate is not complete", path)
         _require(run.get("rollout", {}).get("model", {}).get("model_id") == model,
-                 "online rollout 模型与目录不一致", path)
+                 "online rollout model does not match the directory", path)
         scores = aggregate.get("paper_scores")
         _require(
             isinstance(scores, dict)
             and all(isinstance(scores.get(metric), (int, float)) for metric in ONLINE_METRICS),
-            "online paper_scores 不完整",
+            "online paper_scores is incomplete",
             path,
         )
         rows.append({"model": model, "setting": setting, **{
@@ -115,13 +124,13 @@ def _write(name: str, rows: list[dict], destination: Path) -> None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="收集完整的 GUI-CC 结果矩阵。")
+    parser = argparse.ArgumentParser(description="Collect the complete GUI-CC result matrix.")
     parser.add_argument(
         "--split", choices=("offline", "online", "all"), default="all",
-        help="选择要收集的实验分支。",
+        help="which track to collect.",
     )
-    parser.add_argument("--output-root", help="实验输出根目录。")
-    parser.add_argument("--destination", help="结果 JSON 和 CSV 的保存目录。")
+    parser.add_argument("--output-root", help="root directory of the experiment outputs.")
+    parser.add_argument("--destination", help="directory for the result JSON and CSV.")
     args = parser.parse_args()
     output_value = Path(args.output_root).expanduser() if args.output_root else ROOT / "outputs"
     output_root = (

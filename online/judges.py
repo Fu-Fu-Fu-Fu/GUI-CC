@@ -12,6 +12,7 @@ from typing import Any, Optional
 
 from PIL import Image
 
+from utils.config import env
 from utils.prompts.judge_prompts import (
     S_AD_SYSTEM_PROMPT,
     S_AD_USER_TEMPLATE,
@@ -28,12 +29,27 @@ from utils.prompts.judge_prompts import (
 )
 
 
+
+def _judge_extra_body() -> dict:
+    """Provider-specific request fields, empty unless JUDGE_EXTRA_BODY_JSON is set."""
+    raw = (env("JUDGE_EXTRA_BODY_JSON", "") or "").strip()
+    if not raw:
+        return {}
+    try:
+        parsed = json.loads(raw)
+    except json.JSONDecodeError as error:
+        raise ValueError(f"JUDGE_EXTRA_BODY_JSON is not valid JSON: {error}") from error
+    if not isinstance(parsed, dict):
+        raise ValueError("JUDGE_EXTRA_BODY_JSON must be a JSON object")
+    return parsed
+
+
 REQUEST_TIMEOUT = 600.0
 # 与 offline 保持同一套 judge 请求参数：max_tokens 是防跑飞的安全上限，不是预算，
-# judge 只回一小段 JSON，截断才是真正的故障模式（推理模型的 reasoning token 也计入）。
-DEFAULT_MAX_TOKENS = 1536  # see offline/judges.py
-# 与 offline 一致：qwen judge 显式关闭思考模式（见 offline/judges.py）。
-JUDGE_EXTRA_BODY = {"enable_thinking": False}
+# judge 只回一小段 JSON，截断才是真正的故障模式（推理模型的 reasoning token 也计入)。
+DEFAULT_MAX_TOKENS = 4096  # see offline/judges.py
+# 与 offline 一致：qwen judge 显式关闭思考模式（见 offline/judges.py)。
+JUDGE_EXTRA_BODY = _judge_extra_body()
 
 
 def parse_json_object(text: str) -> Optional[dict]:
@@ -195,14 +211,14 @@ def action_description(action: Optional[dict]) -> str:
     return f'{action_type} on "{target}"' if target else action_type
 
 # 图片编码是评测协议的一部分：改这些值会改变 judge 看到的输入。
-# trajectory 用更小的尺寸是因为一条消息里最多带 25 帧。
+# trajectory 用更小的尺寸是因为一条消息里最多带 25 frames。
 IMAGE_ENCODING = {
     "step": {"longest_edge": 1280, "jpeg_quality": 88},
     "trajectory": {"longest_edge": 768, "jpeg_quality": 82},
 }
 
 PAPER_METRICS = ("S_ad", "S_id", "S_use", "S_cp", "S_rd", "S_mp")
-from online.trajectory import MAX_TRAJECTORY_FRAMES  # 单一事实来源（trajectory.py）
+from online.trajectory import MAX_TRAJECTORY_FRAMES  # 单一事实来源（trajectory.py)
 
 _S_USE_KEYS = (
     "C1_valid_mobile_gui",
@@ -264,13 +280,13 @@ def _parsed_result(result: dict) -> tuple[Optional[dict], Optional[dict]]:
     if result.get("api_model") not in (None, result.get("requested_model")):
         return None, _error(
             "model_identity_error",
-            f"judge 响应模型 {result.get('api_model')!r} 与请求模型 "
-            f"{result.get('requested_model')!r} 不一致",
+            f"judge response model {result.get('api_model')!r} does not match the requested model "
+            f"{result.get('requested_model')!r}",
             result,
         )
     parsed = parsed_with_meta(result)
     if not isinstance(parsed, dict):
-        return None, _error("json_parse_error", "judge 回复不是 JSON 对象", result)
+        return None, _error("json_parse_error", "the judge reply is not a JSON object", result)
     if parsed.get("error"):
         return None, _error("judge_response_error", str(parsed["error"]), result)
     return parsed, None
@@ -288,7 +304,7 @@ def _strict_number(value: Any, low: float, high: float) -> Optional[float]:
 def _required_text(parsed: dict, key: str, result: dict) -> Optional[dict]:
     value = parsed.get(key)
     if not isinstance(value, str) or not value.strip():
-        return _error("evidence_parse_error", f"{key} 必须是非空字符串", result)
+        return _error("evidence_parse_error", f"{key}  must be a non-empty string", result)
     return None
 
 
@@ -303,10 +319,10 @@ def _strict_binary_score(
     for key in keys:
         value = parsed.get(key)
         if isinstance(value, bool) or not isinstance(value, (int, float)) or value not in (0, 1):
-            return _error("binary_parse_error", f"{key} 必须是数值 0 或 1", result)
+            return _error("binary_parse_error", f"{key}  must be the number 0 or 1", result)
         values.append(int(value))
-    # score 与各二值字段冗余，以 criteria 之和为准；judge 偶写错冗余汇总（约 0.2%），
-    # 不一致时记录标记不作废（与 offline/judges.py 的 strict_binary 一致）。
+    # score 与各二值字段冗余，以 criteria 之和为准；judge 偶写错冗余汇总（约 0.2%)，
+    #时记录标记不作废（与 offline/judges.py 的 strict_binary 一致)。
     reported = parsed.get("score")
     if (
         isinstance(reported, bool)
@@ -322,7 +338,7 @@ def _strict_binary_score(
         not isinstance(parsed.get("failure_modes"), list)
         or not all(isinstance(item, str) for item in parsed["failure_modes"])
     ):
-        return _error("evidence_parse_error", "failure_modes 必须是字符串列表", result)
+        return _error("evidence_parse_error", "failure_modes must be a list of strings", result)
     return {"score": sum(values) / len(keys), "details": parsed, "raw_response": result.get("raw", "")}
 
 
@@ -337,13 +353,14 @@ def _expected_action(action: dict) -> str:
     return action_type
 
 
-def judge_s_ad(client, model: str, before: Path, after: Path, instruction: str, action: dict) -> dict:
+def judge_s_ad(client, model: str, before: Path, after: Path, instruction: str, action: dict,
+               max_tokens: int = DEFAULT_MAX_TOKENS) -> dict:
     user_text = S_AD_USER_TEMPLATE.format(
         instruction=instruction,
         semantic_description=action_description(action),
         action_json=json.dumps(action, ensure_ascii=False),
     )
-    result = vlm_call(client, model, [
+    result = vlm_call(client, model, max_tokens=max_tokens, messages=[
         {"role": "system", "content": S_AD_SYSTEM_PROMPT},
         {"role": "user", "content": [
             {"type": "image_url", "image_url": {"url": step_image_url(before)}},
@@ -356,15 +373,16 @@ def judge_s_ad(client, model: str, before: Path, after: Path, instruction: str, 
         return error
     score = _strict_number(parsed.get("score"), 0.0, 10.0)
     if score is None:
-        return _error("score_parse_error", "score 必须是 [0, 10] 范围内的数值", result)
+        return _error("score_parse_error", "score 必须是 [0, 10]的数值", result)
     evidence_error = _required_text(parsed, "reasoning", result)
     if evidence_error:
         return evidence_error
     return {"score": score / 10.0, "raw_score": score, "details": parsed, "raw_response": result.get("raw", "")}
 
 
-def judge_s_id(client, model: str, before: Path, after: Path, action: dict) -> dict:
-    result = vlm_call(client, model, [
+def judge_s_id(client, model: str, before: Path, after: Path, action: dict,
+               max_tokens: int = DEFAULT_MAX_TOKENS) -> dict:
+    result = vlm_call(client, model, max_tokens=max_tokens, messages=[
         {"role": "system", "content": S_ID_SYSTEM_PROMPT},
         {"role": "user", "content": [
             {"type": "image_url", "image_url": {"url": step_image_url(before)}},
@@ -394,8 +412,9 @@ def judge_s_id(client, model: str, before: Path, after: Path, action: dict) -> d
     }
 
 
-def judge_s_use(client, model: str, after: Path) -> dict:
-    result = vlm_call(client, model, [
+def judge_s_use(client, model: str, after: Path,
+                max_tokens: int = DEFAULT_MAX_TOKENS) -> dict:
+    result = vlm_call(client, model, max_tokens=max_tokens, messages=[
         {"role": "system", "content": S_USE_SYSTEM_PROMPT},
         {"role": "user", "content": [
             {"type": "text", "text": S_USE_USER_PROMPT},
@@ -416,9 +435,9 @@ def _trajectory_messages(
     frames: list[Path],
 ) -> list:
     if len(frames) > MAX_TRAJECTORY_FRAMES:
-        raise ValueError(f"Online 轨迹最多可包含 {MAX_TRAJECTORY_FRAMES} 帧")
+        raise ValueError(f"an online trajectory may contain at most {MAX_TRAJECTORY_FRAMES} frames")
     if len(frames) != len(actions) + 1:
-        raise ValueError("轨迹帧数必须恰好比动作数多 1")
+        raise ValueError("the frame count must be exactly one more than the action count")
     action_lines = "\n".join(
         f"- step {index + 1}: {action_description(action) if action else 'unavailable due to rollout error'}"
         for index, action in enumerate(actions)
@@ -448,25 +467,31 @@ def _judge_trajectory(
     metric_name: str,
     system_prompt: str,
     keys: tuple[str, ...],
+    max_tokens: int = DEFAULT_MAX_TOKENS,
 ) -> dict:
     result = vlm_call(
         client,
         model,
         _trajectory_messages(system_prompt, metric_name, instruction, actions, frames),
+        max_tokens=max_tokens,
     )
     parsed, error = _parsed_result(result)
     return error or _strict_binary_score(parsed, keys, result)
 
 
-def judge_s_cp(client, model: str, instruction: str, actions: list[Optional[dict]], frames: list[Path]) -> dict:
+def judge_s_cp(client, model: str, instruction: str, actions: list[Optional[dict]], frames: list[Path],
+               max_tokens: int = DEFAULT_MAX_TOKENS) -> dict:
     return _judge_trajectory(
-        client, model, instruction, actions, frames, "S_cp", S_CP_SYSTEM_PROMPT, _S_CP_KEYS
+        client, model, instruction, actions, frames, "S_cp", S_CP_SYSTEM_PROMPT, _S_CP_KEYS,
+        max_tokens=max_tokens,
     )
 
 
-def judge_s_rd(client, model: str, instruction: str, actions: list[Optional[dict]], frames: list[Path]) -> dict:
+def judge_s_rd(client, model: str, instruction: str, actions: list[Optional[dict]], frames: list[Path],
+               max_tokens: int = DEFAULT_MAX_TOKENS) -> dict:
     return _judge_trajectory(
-        client, model, instruction, actions, frames, "S_rd", S_RD_SYSTEM_PROMPT, _S_RD_KEYS
+        client, model, instruction, actions, frames, "S_rd", S_RD_SYSTEM_PROMPT, _S_RD_KEYS,
+        max_tokens=max_tokens,
     )
 
 
@@ -481,20 +506,20 @@ def _parse_milestone(result: dict, earliest: int, frame_count: int) -> dict:
     passed = parsed.get("passed")
     first = parsed.get("first_satisfied_frame")
     if isinstance(passed, bool) or not isinstance(passed, (int, float)) or passed not in (0, 1):
-        return _error("binary_parse_error", "passed 必须是数值 0 或 1", result)
+        return _error("binary_parse_error", "passed  must be the number 0 or 1", result)
     passed = int(passed)
     if type(first) is not int:
-        return _error("frame_parse_error", "first_satisfied_frame 必须是整数", result)
+        return _error("frame_parse_error", "first_satisfied_frame must be an integer", result)
     evidence_error = _required_text(parsed, "evidence", result)
     if evidence_error:
         return evidence_error
     if passed == 0:
         if first != -1:
-            return _error("frame_parse_error", "未通过的 milestone 必须使用帧 -1", result)
+            return _error("frame_parse_error", "a failed milestone must use frame -1", result)
     elif first < earliest or first >= frame_count:
         return _error(
             "frame_parse_error",
-            f"first_satisfied_frame {first} 超出实际帧范围 [{earliest}, {frame_count - 1}]",
+            f"first_satisfied_frame {first} is outside the actual frame range [{earliest}, {frame_count - 1}]",
             result,
         )
     return {
@@ -506,18 +531,19 @@ def _parse_milestone(result: dict, earliest: int, frame_count: int) -> dict:
     }
 
 
-def judge_s_mp(client, model: str, task: dict, frames: list[Path]) -> dict:
+def judge_s_mp(client, model: str, task: dict, frames: list[Path],
+               max_tokens: int = DEFAULT_MAX_TOKENS) -> dict:
     if not frames or len(frames) > MAX_TRAJECTORY_FRAMES:
-        return _error("trajectory_error", f"S_mp 需要 1 至 {MAX_TRAJECTORY_FRAMES} 个实际帧")
+        return _error("trajectory_error", f"S_mp needs 1 to {MAX_TRAJECTORY_FRAMES} actual frames")
     milestones = task.get("milestones")
     if not isinstance(milestones, list) or not milestones:
-        return _error("milestone_error", "任务没有有序 milestone")
+        return _error("milestone_error", "the task has no ordered milestones")
     per_milestone: list[dict] = []
     earliest = 0
     passed_prefix = 0
     for index, milestone in enumerate(milestones):
         if not isinstance(milestone, dict):
-            return _error("milestone_error", f"milestone {index} 不是对象")
+            return _error("milestone_error", f"milestone {index} is not an object")
         text = S_MP_USER_TEMPLATE.format(
             instruction=task["instruction"],
             milestone_id=milestone.get("id", index),
@@ -531,7 +557,7 @@ def judge_s_mp(client, model: str, task: dict, frames: list[Path]) -> dict:
                 {"type": "text", "text": f"Frame {frame_index}."},
                 {"type": "image_url", "image_url": {"url": trajectory_image_url(frame)}},
             ])
-        result = vlm_call(client, model, [
+        result = vlm_call(client, model, max_tokens=max_tokens, messages=[
             {"role": "system", "content": S_MP_SYSTEM_PROMPT},
             {"role": "user", "content": content},
         ])

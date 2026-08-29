@@ -39,23 +39,23 @@ API_CLIENT = None
 
 
 def _arguments() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="评测 offline GUI 世界模型 rollout。")
-    parser.add_argument("--model", required=True, help="世界模型标识符")
+    parser = argparse.ArgumentParser(description="Evaluate an offline GUI world-model rollout.")
+    parser.add_argument("--model", required=True, help="world-model identifier")
     parser.add_argument("--setting", choices=["WM-Markov", "WM-FullHist"], default="WM-Markov")
-    parser.add_argument("--sample-ids", help="只评测这些 sample（逗号分隔）；缺省评测全部 500 个")
+    parser.add_argument("--sample-ids", help="evaluate only these samples (comma separated); default is all 500")
     parser.add_argument("--subset", type=int, metavar="N",
-                        help="只评测固定的 N 条小样本（等间距取样，所有模型相同；见 utils/subset.py）")
+                        help="evaluate only the fixed evenly spaced subset of N samples (identical across models; see utils/subset.py)")
     parser.add_argument("--api-key", default=env("OPENAI_API_KEY"))
     parser.add_argument("--base-url", default=env("OPENAI_BASE_URL"))
     parser.add_argument("--parallel", type=int, default=8,
-                        help="并发评测的 episode 数，即打向 judge API 的并发请求数")
+                        help="episodes evaluated in parallel, i.e. concurrent requests to the judge API")
     parser.add_argument("--judge-model", default=JUDGE_MODEL,
-                        help="打分用的 VLM；默认是论文使用的模型")
+                        help="VLM used for judging; defaults to the model reported in the paper")
     parser.add_argument("--max-tokens", type=int, default=DEFAULT_MAX_TOKENS,
-                        help="单次 judge 回复的安全上限（推理模型的思考 token 也计入）")
+                        help="safety ceiling for one judge reply; reasoning models spend this budget on reasoning tokens too")
     parser.add_argument("--force", action="store_true",
-                        help="忽略已有的 evaluation.json，重新调用 judge 评测")
-    parser.add_argument("--dry-run", action="store_true", help="只校验输入，不调用 judge")
+                        help="ignore any cached evaluation.json and re-run the judge")
+    parser.add_argument("--dry-run", action="store_true", help="validate the inputs without calling the judge")
     return parser.parse_args()
 
 
@@ -69,7 +69,7 @@ def _select_samples(args: argparse.Namespace) -> tuple[list[str], bool]:
     wanted = {value.strip() for value in args.sample_ids.split(",") if value.strip()}
     selected = [sample_id for sample_id in all_ids if sample_id in wanted]
     if not selected:
-        raise ValueError(f"--sample-ids 没有匹配到任何样本：{args.sample_ids}")
+        raise ValueError(f"--sample-ids matched no sample: {args.sample_ids}")
     return selected, True
 
 
@@ -80,7 +80,7 @@ def _output_names(is_partial: bool) -> tuple[str, str, str]:
 
 
 def _model_failure_step(record: dict) -> int:
-    """model failure 记录的最后一步就是失败步（rollout 在此中断）。"""
+    """model failure 记录的最后一步就是失败步 (rollout 在此中断）。"""
     return record["steps"][-1]["step"]
 
 
@@ -155,9 +155,9 @@ def run(args: argparse.Namespace) -> int:
 
     rollout_run = load_json(prediction_config_dir / "run.json")
     if rollout_run["model"]["model_id"] != args.model:
-        raise ValueError("rollout 模型与 --model 不一致")
+        raise ValueError("rollout model does not match --model")
     if rollout_run["model"]["history_setting"] != args.setting:
-        raise ValueError("rollout history setting 与 --setting 不一致")
+        raise ValueError("rollout history setting does not match --setting")
     rollout_summary = load_json(prediction_config_dir / "summary.json")
 
     # 模型失败的样本按协议记 0 分进固定分母；基础设施失败必须修复后重跑。
@@ -172,7 +172,7 @@ def run(args: argparse.Namespace) -> int:
                 "failure_step": _model_failure_step(record),
             }
         else:
-            reason = record.get("error") or "rollout summary 缺少该 sample 的记录"
+            reason = record.get("error") or "the rollout summary has no record for this sample"
             rollout_errors.append({
                 "sample_id": sample_id,
                 "error": f"INFRA_BLOCKED: {reason}",
@@ -183,7 +183,7 @@ def run(args: argparse.Namespace) -> int:
     ]
     # 在昂贵的图片 preflight 之前确认 judge 凭据（全是模型失败时不调 judge，无需 key）。
     if scorable_episodes and not args.dry_run and API_CLIENT is None and not args.api_key:
-        raise ValueError("未设置 OPENAI_API_KEY；请传入 --api-key 或设置同名环境变量")
+        raise ValueError("OPENAI_API_KEY is not set; pass --api-key or set the environment variable")
 
     report = _preflight(
         episodes,
@@ -195,13 +195,13 @@ def run(args: argparse.Namespace) -> int:
     atomic_write_json(output_dir / preflight_name, report)
     print(
         f"judge={args.judge_model} 配置={args.model}/{args.setting} "
-        f"episode 数={len(sample_ids)} 范围={report['scope']}"
+        f"episodes={len(sample_ids)} scope={report['scope']}"
     )
     if report["errors"]:
         print(json.dumps(report, ensure_ascii=False, indent=2))
         return 2
     if args.dry_run:
-        print(f"preflight 已通过：{output_dir / preflight_name}")
+        print(f"preflight passed: {output_dir / preflight_name}")
         return 0
     configuration = evaluation_config(
         args.model, args.setting, args.base_url, args.judge_model, args.max_tokens,
@@ -257,7 +257,7 @@ def run(args: argparse.Namespace) -> int:
                     "complete": False,
                     "error": f"{type(error).__name__}: {str(error)[:500]}",
                 }
-                print(f"[{sample_id}] 错误：{error}")
+                print(f"[{sample_id}] error: {error}")
             atomic_write_json(output_dir / results_name, results)
 
     aggregate = aggregate_results(
@@ -268,7 +268,7 @@ def run(args: argparse.Namespace) -> int:
     # 循环内的写盘只覆盖有 episode 被评测的情况；全是模型失败时这里是唯一写入点。
     atomic_write_json(output_dir / results_name, results)
     print(json.dumps(aggregate, ensure_ascii=False, indent=2))
-    print(f"耗时={time.time() - started:.0f}s 输出目录={output_dir}")
+    print(f"elapsed={time.time() - started:.0f}s output={output_dir}")
     return 0 if aggregate["complete"] else 1
 
 
@@ -276,7 +276,7 @@ def main() -> None:
     try:
         code = run(_arguments())
     except (FileNotFoundError, ValueError) as error:
-        print(f"配置错误：{error}")
+        print(f"configuration error: {error}")
         code = 2
     raise SystemExit(code)
 

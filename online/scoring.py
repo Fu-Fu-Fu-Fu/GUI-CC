@@ -34,7 +34,7 @@ def _json_bytes(value: Any) -> bytes:
 
 
 def _validate_frame(path: Path) -> None:
-    """在发起任何付费 judge 请求前确认帧可解码。"""
+    """Confirm every frame decodes before making any paid judge request."""
     try:
         payload = path.read_bytes()
         with Image.open(BytesIO(payload)) as image:
@@ -42,9 +42,9 @@ def _validate_frame(path: Path) -> None:
         with Image.open(BytesIO(payload)) as image:
             size = (int(image.width), int(image.height))
     except Exception as error:  # Pillow 会按图像格式抛出不同类型的异常。
-        raise ValueError(f"轨迹帧 {path} 无效：{error}") from error
+        raise ValueError(f"trajectory frame {path} is invalid: {error}") from error
     if size[0] <= 0 or size[1] <= 0:
-        raise ValueError(f"轨迹帧 {path} 的尺寸无效：{size}")
+        raise ValueError(f"trajectory frame {path} has an invalid size: {size}")
 
 
 def _task_signature(
@@ -55,7 +55,7 @@ def _task_signature(
     judge_model: str,
     base_url: str,
 ) -> str:
-    """评测配置的稳定标识，用作 per-task judge 缓存的 key。"""
+    """Stable identity of the evaluation configuration, used as the per-task judge cache key."""
     payload = {
         "task": task,
         "rollout_record": rollout,
@@ -79,10 +79,10 @@ def prepare_tasks(
     judge_model: str,
     base_url: str,
 ) -> dict[str, PreparedTask]:
-    """在调用 judge 前校验所有请求的 rollout 和帧。"""
+    """Validate every requested rollout and frame before calling the judge."""
     rollout_run = rollouts.get("_RUN")
     if not isinstance(rollout_run, dict):
-        raise ValueError("rollout_results.json 缺少必需的 _RUN 元数据")
+        raise ValueError("rollout_results.json is missing the required _RUN metadata")
     validate_rollouts(
         rollouts,
         task_defs,
@@ -97,16 +97,16 @@ def prepare_tasks(
         actions = tuple(trajectory["actions"])
         if len(actions) > task_defs[task_id]["step_budget"]:
             raise ValueError(
-                f"任务 {task_id}：rollout 含 {len(actions)} 个动作，"
-                f"但预算为 {task_defs[task_id]['step_budget']}"
+                f"task {task_id}：rollout contains {len(actions)} actions but the budget is "
+                f"{task_defs[task_id]['step_budget']}"
             )
         if len(frames) > judges.MAX_TRAJECTORY_FRAMES:
             raise ValueError(
-                f"任务 {task_id}：{len(frames)} 帧超过正式评测上限 "
+                f"task {task_id}：{len(frames)} frames超过正式评测上限 "
                 f"{judges.MAX_TRAJECTORY_FRAMES}"
             )
         if any(action is None for action in actions):
-            raise ValueError(f"任务 {task_id}：rollout 包含不可用的智能体动作")
+            raise ValueError(f"task {task_id}：the rollout contains an unusable agent action")
         for frame in frames:
             _validate_frame(frame)
         prepared[task_id] = PreparedTask(
@@ -127,7 +127,7 @@ def prepare_tasks(
 
 
 class JudgeCache:
-    """按签名匹配复用的 per-metric judge 结果缓存。"""
+    """Per-metric judge result cache, reused when the signature matches."""
 
     def __init__(self, root: Path) -> None:
         self.root = root
@@ -202,10 +202,11 @@ def _step_metric(
     model: str,
     step: int,
     force: bool,
+    max_tokens: int = judges.DEFAULT_MAX_TOKENS,
 ) -> dict:
     action = prepared.actions[step]
     if action is None:
-        return {"step": step, "skipped": True, "error": {"kind": "input_error", "message": "缺少动作"}}
+        return {"step": step, "skipped": True, "error": {"kind": "input_error", "message": "missing action"}}
     record: dict[str, Any] = {
         "step": step,
         "action": action,
@@ -215,9 +216,9 @@ def _step_metric(
         return record
     before, after = prepared.frames[step], prepared.frames[step + 1]
     calls = {
-        "S_ad": lambda: judges.judge_s_ad(client, model, before, after, prepared.task["instruction"], action),
-        "S_id": lambda: judges.judge_s_id(client, model, before, after, action),
-        "S_use": lambda: judges.judge_s_use(client, model, after),
+        "S_ad": lambda: judges.judge_s_ad(client, model, before, after, prepared.task["instruction"], action, max_tokens),
+        "S_id": lambda: judges.judge_s_id(client, model, before, after, action, max_tokens),
+        "S_use": lambda: judges.judge_s_use(client, model, after, max_tokens),
     }
     for metric, call in calls.items():
         record[metric] = _cached_judge(
@@ -237,7 +238,7 @@ def _mean_step_metric(steps: list[dict], metric: str) -> tuple[Optional[float], 
             errors.append({
                 "path": f"steps[{step['step']}].{metric}",
                 "kind": "missing_result",
-                "message": "缺少 judge 结果",
+                "message": "missing judge result",
             })
         elif result.get("error"):
             errors.append({"path": f"steps[{step['step']}].{metric}", **result["error"]})
@@ -245,7 +246,7 @@ def _mean_step_metric(steps: list[dict], metric: str) -> tuple[Optional[float], 
         return None, errors
     scores = [step[metric].get("score") for step in considered]
     if not scores or not all(_is_score(score) for score in scores):
-        return None, [{"path": metric, "kind": "missing_score", "message": "没有完整的步骤分数"}]
+        return None, [{"path": metric, "kind": "missing_score", "message": "incomplete per-step scores"}]
     return sum(float(score) for score in scores) / len(scores), []
 
 
@@ -270,12 +271,13 @@ def evaluate_task(
     cache: JudgeCache,
     *,
     force: bool = False,
+    max_tokens: int = judges.DEFAULT_MAX_TOKENS,
 ) -> dict:
     steps = []
     for index in range(len(prepared.actions)):
         try:
-            steps.append(_step_metric(cache, prepared, client, model, index, force))
-        except Exception as error:  # 保留可审计记录，并将本次运行标记为失败。
+            steps.append(_step_metric(cache, prepared, client, model, index, force, max_tokens))
+        except Exception as error:  # Keep an auditable record and mark this run as failed.
             steps.append({"step": index,
                           "error": {"kind": "judge_exception", "message": str(error)[:500]}})
     errors = [
@@ -289,12 +291,14 @@ def evaluate_task(
 
     trajectory_calls = {
         "S_cp": lambda: judges.judge_s_cp(
-            client, model, prepared.task["instruction"], list(prepared.actions), list(prepared.frames)
+            client, model, prepared.task["instruction"], list(prepared.actions),
+            list(prepared.frames), max_tokens
         ),
         "S_rd": lambda: judges.judge_s_rd(
-            client, model, prepared.task["instruction"], list(prepared.actions), list(prepared.frames)
+            client, model, prepared.task["instruction"], list(prepared.actions),
+            list(prepared.frames), max_tokens
         ),
-        "S_mp": lambda: judges.judge_s_mp(client, model, prepared.task, list(prepared.frames)),
+        "S_mp": lambda: judges.judge_s_mp(client, model, prepared.task, list(prepared.frames), max_tokens),
     }
     trajectory_results: dict[str, dict] = {}
     for metric, call in trajectory_calls.items():
@@ -309,7 +313,7 @@ def evaluate_task(
         else:
             metrics[metric] = float(result["score"]) if _is_score(result.get("score")) else None
             if metrics[metric] is None:
-                errors.append({"path": metric, "kind": "missing_score", "message": "judge 未返回有效分数"})
+                errors.append({"path": metric, "kind": "missing_score", "message": "the judge returned no valid score"})
 
     metrics["Overall"] = overall(metrics, errors)
     return {
@@ -366,6 +370,7 @@ def evaluate_tasks(
     previous: Optional[dict[str, dict]] = None,
     force: bool = False,
     task_parallelism: int = 8,
+    max_tokens: int = judges.DEFAULT_MAX_TOKENS,
     on_result: Optional[Callable[[str, dict, dict[str, dict]], None]] = None,
 ) -> dict[str, dict]:
     previous = previous or {}
@@ -384,6 +389,7 @@ def evaluate_tasks(
                 model,
                 cache,
                 force=force,
+                max_tokens=max_tokens,
             ): task_id
             for task_id in pending
         }
@@ -401,7 +407,7 @@ def evaluate_tasks(
 def aggregate_results(
     task_ids: list[str], results: dict[str, dict], *, full: bool = True
 ) -> dict:
-    """仅聚合 ``task_ids``，忽略恢复运行时出现的无关任务。"""
+    """Aggregate only ``task_ids``; unrelated tasks from a resumed run are ignored."""
     requested = len(task_ids)
     metric_names = (*judges.PAPER_METRICS, "Overall")
     counts: dict[str, int] = {}
@@ -413,14 +419,14 @@ def aggregate_results(
     for task_id in task_ids:
         record = results.get(task_id)
         if not isinstance(record, dict):
-            task_errors[task_id] = [{"kind": "missing_task", "message": "缺少评测结果"}]
+            task_errors[task_id] = [{"kind": "missing_task", "message": "missing evaluation result"}]
             continue
         failure_class = record.get("failure_class")
         if failure_class == "model":
             model_failed_count += 1
             continue
         if failure_class == "infrastructure":
-            task_errors[task_id] = [{"kind": "infra_blocked", "message": "基础设施失败（INFRA_BLOCKED）"}]
+            task_errors[task_id] = [{"kind": "infra_blocked", "message": "infrastructure failure (INFRA_BLOCKED)"}]
             infra_blocked_count += 1
             continue
         errors = list(record.get("errors") or [])
@@ -429,7 +435,7 @@ def aggregate_results(
         if missing:
             errors.append({
                 "kind": "missing_metrics",
-                "message": f"缺少有效指标：{', '.join(missing)}",
+                "message": f"missing valid metrics: {', '.join(missing)}",
             })
         if errors:
             task_errors[task_id] = errors

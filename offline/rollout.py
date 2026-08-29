@@ -156,36 +156,36 @@ def _validate_output_namespace(config_dir: Path, run: dict[str, Any]) -> None:
     previous = json.loads(manifest_path.read_text(encoding="utf-8"))
     if previous.get("run_sha256") != run["run_sha256"]:
         raise RuntimeError(
-            f"{config_dir} 下已有不同配置的输出。"
-            "请使用新的 --output-root；旧预测绝不能与新 run 混用。"
+            f"{config_dir}  already holds output from a different configuration. "
+            "Use a new --output-root; predictions from different runs must never be mixed."
         )
 
 
 def main() -> None:
     config = load_project_json(OFFLINE_CONFIG)
-    parser = argparse.ArgumentParser(description="GUI-CC offline rollout 生成")
+    parser = argparse.ArgumentParser(description="Generate GUI-CC offline rollout predictions")
     parser.add_argument("--model", required=True)
     parser.add_argument("--setting", choices=["WM-Markov", "WM-FullHist"], required=True)
-    parser.add_argument("--sample-ids", help="只生成这些 sample（逗号分隔）；缺省生成全部 500 个")
+    parser.add_argument("--sample-ids", help="generate only these samples (comma separated); default is all 500")
     parser.add_argument("--subset", type=int, metavar="N",
-                        help="只生成固定的 N 条小样本（等间距取样，所有模型相同；见 utils/subset.py）")
+                        help="generate only the fixed evenly spaced subset of N samples (identical across models; see utils/subset.py)")
     parser.add_argument("--output-root", default=str(OFFLINE_PREDICTIONS_ROOT))
     parser.add_argument("--workers", type=int)
     parser.add_argument("--endpoint")
     parser.add_argument("--served-model",
-                        help="覆盖 API 世界模型的模型名（没有论文所用闭源模型权限时换模型试跑）")
+                        help="override the served model name of an API world model")
     parser.add_argument("--device", default="cuda")
-    parser.add_argument("--force", action="store_true", help="不使用 WM cache，重新运行选中的样本")
-    parser.add_argument("--shard-count", type=int, help="并行独立分片数")
-    parser.add_argument("--shard-index", type=int, help="当前分片序号（从 0 开始）")
+    parser.add_argument("--force", action="store_true", help="ignore the world-model cache and rerun the selected samples")
+    parser.add_argument("--shard-count", type=int, help="number of independent shards")
+    parser.add_argument("--shard-index", type=int, help="index of this shard (0-based)")
     args = parser.parse_args()
 
     history_window = int(config["history_window"])
     if not 1 <= history_window <= 3:
-        parser.error("utils/configs/offline.json 的 history_window 必须位于 1 到 3 之间")
+        parser.error("history_window in utils/configs/offline.json must be between 1 and 3")
     spec = get_model_spec(config, args.model)
     if args.setting not in spec["settings"]:
-        parser.error(f"{args.model} 未配置 {args.setting}")
+        parser.error(f"{args.model} does not have the setting {args.setting}")
     if args.served_model:
         spec["served_model" if "served_model" in spec else "model"] = args.served_model
     output_root = Path(args.output_root).expanduser().resolve()
@@ -193,14 +193,14 @@ def main() -> None:
     sample_ids = list(all_ids)
     shard_enabled = args.shard_count is not None or args.shard_index is not None
     if shard_enabled and (args.shard_count is None or args.shard_index is None):
-        parser.error("--shard-count 与 --shard-index 必须同时使用")
+        parser.error("--shard-count and --shard-index must be used together")
     if shard_enabled and (args.sample_ids or args.subset):
-        parser.error("shard 模式不能与 --sample-ids/--subset 混用；分片必须基于完整样本集合")
+        parser.error("shard mode cannot be combined with --sample-ids/--subset; sharding must cover the full sample set")
     if args.sample_ids:
         wanted = {value.strip() for value in args.sample_ids.split(",") if value.strip()}
         sample_ids = [sample_id for sample_id in sample_ids if sample_id in wanted]
         if not sample_ids:
-            parser.error(f"--sample-ids 没有匹配到任何样本：{args.sample_ids}")
+            parser.error(f"--sample-ids matched no sample: {args.sample_ids}")
     if args.subset:
         sample_ids = subset_ids(all_ids, args.subset)
 
@@ -213,7 +213,7 @@ def main() -> None:
         except ValueError as error:
             parser.error(str(error))
         if not sample_ids:
-            parser.error("当前 shard 没有分配到样本；请减少 --shard-count")
+            parser.error("this shard got no samples; reduce --shard-count")
         output_root = shard_worker_root(
             output_root, args.model, args.setting, args.shard_count, args.shard_index
         )
@@ -226,7 +226,7 @@ def main() -> None:
     _validate_output_namespace(config_dir, run)
     if shard_enabled:
         print(
-            f"Offline shard {args.shard_index}/{args.shard_count} 输出：{config_dir}",
+            f"Offline shard {args.shard_index}/{args.shard_count} output: {config_dir}",
             flush=True,
         )
     adapter = create_adapter(
@@ -240,7 +240,7 @@ def main() -> None:
     if spec["adapter"] in LOCAL_IMAGE_ADAPTERS:
         # 本地图像模型共用同一个 GPU pipeline，并发访问会互相踩踏。
         if args.workers and args.workers != 1:
-            print(f"{args.model} 是本地图像模型，忽略 --workers {args.workers}，按 1 运行", flush=True)
+            print(f"{args.model}  is a local image model; ignoring --workers {args.workers} and running with 1", flush=True)
         workers = 1
     else:
         workers = args.workers or 8
@@ -278,15 +278,15 @@ def main() -> None:
                     "failure_class": "infrastructure",
                 }
             atomic_write_json(summary_path, {"run": run, "samples": results})
-            print(f"[{sample_id}] 完成={results[sample_id].get('complete')}", flush=True)
+            print(f"[{sample_id}] complete={results[sample_id].get('complete')}", flush=True)
 
     failed = [sample_id for sample_id in sample_ids if not results.get(sample_id, {}).get("complete")]
     model_failed = [sid for sid in failed if results.get(sid, {}).get("failure_class") == "model"]
     infra_blocked = [sid for sid in failed if results.get(sid, {}).get("failure_class") != "model"]
-    print(f"Offline rollout {args.model}/{history_dir}：{len(sample_ids) - len(failed)}/{len(sample_ids)} 已完成"
-          f"（模型失败 {len(model_failed)}，基础设施失败 {len(infra_blocked)}）")
+    print(f"Offline rollout {args.model}/{history_dir}：{len(sample_ids) - len(failed)}/{len(sample_ids)} done"
+          f" (model failures {len(model_failed)}, infrastructure failures {len(infra_blocked)}）")
     if infra_blocked:
-        raise SystemExit(f"{len(infra_blocked)} 个 offline sample 基础设施失败（INFRA_BLOCKED）；首个：{infra_blocked[0]}")
+        raise SystemExit(f"{len(infra_blocked)}  offline sample(s) hit an infrastructure failure (INFRA_BLOCKED); first: {infra_blocked[0]}")
 
 
 if __name__ == "__main__":

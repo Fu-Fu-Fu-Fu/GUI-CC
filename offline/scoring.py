@@ -93,7 +93,7 @@ def _evaluate_transition(judge: OfflineJudge, episode: dict, transition: dict) -
     if sig is None or dino is None:
         from offline.visual_similarity import backend_status
 
-        raise RuntimeError(f"视觉相似度后端未能同时生成两项分数：{backend_status()}")
+        raise RuntimeError(f"the visual similarity backends did not both produce a score: {backend_status()}")
     ele_lay = judge.s_ele_lay(transition["gt_after"], transition["pred_after"])
     ad = judge.s_ad(transition["pred_before"], transition["pred_after"],
                     episode["task"], transition["action"])

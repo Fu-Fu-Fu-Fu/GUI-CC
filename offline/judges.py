@@ -13,7 +13,7 @@ from typing import Any, Optional
 from PIL import Image
 
 from openai import OpenAI
-from utils.config import OFFLINE_CONFIG, load_project_json
+from utils.config import OFFLINE_CONFIG, env, load_project_json
 
 from utils.prompts.judge_prompts import (
     S_AD_SYSTEM_PROMPT,
@@ -33,28 +33,43 @@ from utils.prompts.judge_prompts import (
 )
 
 
+def _judge_extra_body() -> dict:
+    """Provider-specific request fields, empty unless JUDGE_EXTRA_BODY_JSON is set."""
+    raw = (env("JUDGE_EXTRA_BODY_JSON", "") or "").strip()
+    if not raw:
+        return {}
+    try:
+        parsed = json.loads(raw)
+    except json.JSONDecodeError as error:
+        raise ValueError(f"JUDGE_EXTRA_BODY_JSON is not valid JSON: {error}") from error
+    if not isinstance(parsed, dict):
+        raise ValueError("JUDGE_EXTRA_BODY_JSON must be a JSON object")
+    return parsed
+
+
 _JSON_RE = re.compile(r"\{(?:[^{}]|\{(?:[^{}]|\{[^{}]*\})*\})*\}", re.DOTALL)
 
 
 # 图片编码是评测协议的一部分：改这些值会改变 judge 看到的输入。
-# trajectory 用更小的尺寸是因为一条消息里最多带 25 帧。
+# trajectory 用更小的尺寸是因为一条消息里最多带 25 frames。
 IMAGE_ENCODING = {
     "step": {"longest": 1280, "image_format": "JPEG", "jpeg_quality": 88},
     "trajectory": {"longest": 768, "image_format": "JPEG", "jpeg_quality": 82},
 }
 VLM_RETRIES = 3
-# 单请求超时。带思考的 judge（qwen3.7/3.8 系）整段推理常超过 120s，
+# 单请求超时。带思考的 judge（qwen3.7/3.8 系)整段推理常超过 120s，
 # 按 120s 掐断等于白花一次最贵的慢调用；快模型本来几秒返回，放宽无代价。
 REQUEST_TIMEOUT = 600.0
 # A safety ceiling, not a budget: the judge only returns a short JSON object, so
-# truncation is the real failure mode. Reasoning tokens count against this too, and
-# some gateways cut off long single requests, so keep it tight.
-DEFAULT_MAX_TOKENS = 1536
+# truncation is the real failure mode. Reasoning models spend this budget on reasoning
+# tokens before emitting any content, so raise it with --max-tokens for such a judge.
+DEFAULT_MAX_TOKENS = 4096
 
-# The judge only needs to return a short JSON object, so thinking mode is slower and
-# more expensive for no gain. Providers that support it read this from extra_body;
-# providers that do not simply ignore it.
-JUDGE_EXTRA_BODY = {"enable_thinking": False}
+# Extra request fields, empty by default so that any OpenAI-compatible endpoint works.
+# Some providers expose a switch to disable a reasoning phase the judge does not need,
+# for example {"enable_thinking": false}. Set JUDGE_EXTRA_BODY_JSON in paths.env to a
+# JSON object to pass such fields through.
+JUDGE_EXTRA_BODY = _judge_extra_body()
 
 
 def action_description(action: dict) -> str:
@@ -232,7 +247,7 @@ PROMPTS = {
 
 
 class JudgeError(RuntimeError):
-    """导致 episode 无法评分的 API 或响应错误。"""
+    """API or response error that makes an episode unscorable."""
 
     def __init__(self, metric: str, message: str):
         super().__init__(f"{metric}: {message}")
@@ -240,7 +255,7 @@ class JudgeError(RuntimeError):
 
 
 def public_action(value: Any) -> Any:
-    """Action 离开仓库前递归移除私有标注字段。"""
+    """Recursively drop private annotation fields before an action leaves the repo."""
     if isinstance(value, dict):
         return {
             key: public_action(item)
@@ -255,17 +270,17 @@ def public_action(value: Any) -> Any:
 def strict_binary(parsed: dict[str, Any], keys: list[str], score_key: str | None) -> dict[str, int]:
     missing = [key for key in keys if key not in parsed]
     if missing:
-        raise ValueError(f"缺少二值字段：{', '.join(missing)}")
+        raise ValueError(f"missing binary field(s): {', '.join(missing)}")
     values: dict[str, int] = {}
     for key in keys:
         value = parsed[key]
         if isinstance(value, bool) or not isinstance(value, (int, float)) or value not in (0, 1):
-            raise ValueError(f"{key} 必须是数值 0 或 1")
+            raise ValueError(f"{key}  must be the number 0 or 1")
         values[key] = int(value)
     if score_key is not None:
         # score 字段与各二值字段冗余：以 criteria 之和为准。judge 偶尔会把
-        # 冗余的汇总写错（约 0.2%），为此作废整个样本的全部已付费调用不成比例；
-        # 不一致时记录标记供事后审计，不作废。
+        # 冗余的汇总写错（约 0.2%)，为此作废整个样本的全部已付费调用不成比例；
+        #时记录标记供事后审计，不作废。
         score = parsed.get(score_key)
         if (isinstance(score, bool) or not isinstance(score, (int, float))
                 or int(score) != score or int(score) != sum(values.values())):
@@ -276,17 +291,17 @@ def strict_binary(parsed: dict[str, Any], keys: list[str], score_key: str | None
 def _number(parsed: dict[str, Any], key: str, low: float, high: float) -> float:
     value = parsed.get(key)
     if isinstance(value, bool) or not isinstance(value, (int, float)):
-        raise ValueError(f"{key} 必须是数值")
+        raise ValueError(f"{key}  must be a number")
     value = float(value)
     if not math.isfinite(value) or not low <= value <= high:
-        raise ValueError(f"{key} 必须位于 [{low}, {high}] 范围内")
+        raise ValueError(f"{key}  must lie in [{low}, {high}]")
     return value
 
 
 def _required_text(parsed: dict[str, Any], key: str) -> str:
     value = parsed.get(key)
     if not isinstance(value, str) or not value.strip():
-        raise ValueError(f"{key} 必须是非空字符串")
+        raise ValueError(f"{key}  must be a non-empty string")
     return value.strip()
 
 
@@ -318,12 +333,12 @@ class OfflineJudge:
         result = call_vlm(self.client, self.model, messages, max_tokens=self.max_tokens)
         error = vlm_error_payload(result)
         if error:
-            raise JudgeError(metric, str(error.get("error", "响应无效")))
+            raise JudgeError(metric, str(error.get("error", "invalid response")))
         # Some gateways do not echo the model name; only a present, mismatched echo is an error.
         if result.get("api_model") not in (None, self.model):
             raise JudgeError(
                 metric,
-                f"judge 响应模型 {result.get('api_model')!r} 与请求模型 {self.model!r} 不一致",
+                f"judge response model {result.get('api_model')!r} does not match the requested model {self.model!r}",
             )
         parsed = parsed_with_meta(result)
         parsed["api_model"] = parsed.pop("_api_model", None)
@@ -376,7 +391,7 @@ class OfflineJudge:
         parsed = self._request("S_id", messages)
         inferred = str(parsed.get("inferred_action", "")).strip().lower()
         if inferred not in S_ID_CATEGORIES:
-            raise JudgeError("S_id", f"inferred_action 不在允许的类别内：{inferred!r}")
+            raise JudgeError("S_id", f"inferred_action is not in the allowed set: {inferred!r}")
         _required_text(parsed, "reasoning")
         expected = _expected_action(action)
         return {"S_id": float(inferred == expected), "expected": expected,
@@ -397,7 +412,7 @@ class OfflineJudge:
         if not isinstance(failure_modes, list) or not all(
             isinstance(item, str) for item in failure_modes
         ):
-            raise JudgeError("S_use", "failure_modes 必须是字符串列表")
+            raise JudgeError("S_use", "failure_modes must be a list of strings")
         return {"S_use": sum(values.values()) / 5.0, "criteria": values, "judge": parsed}
 
     def trajectory(self, metric: str, system: str, task: str,
@@ -459,7 +474,7 @@ class OfflineJudge:
                 "terminal_wrong_content", "none",
             }
             if parsed.get("failure_reason") not in allowed_failures:
-                raise JudgeError("S_rap", "failure_reason 不在允许范围内")
+                raise JudgeError("S_rap", "failure_reason is not in the allowed set")
             rows.append({"step": index + 1, "action": action, "next_action": following,
                          "result": values, "judge": parsed})
             if not expected_pass:

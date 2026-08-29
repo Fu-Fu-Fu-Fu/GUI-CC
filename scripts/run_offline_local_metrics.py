@@ -28,7 +28,12 @@ def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--model", required=True)
     parser.add_argument("--setting", choices=("WM-Markov", "WM-FullHist"), required=True)
-    parser.add_argument("--destination", help="结果目录（默认 outputs/offline/evaluation/<model>/<markov|fullhist>）")
+    parser.add_argument("--destination",
+                        help="output directory (default outputs/offline/evaluation/<model>/<markov|fullhist>)")
+    parser.add_argument("--subset", type=int, metavar="N",
+                        help="score only the fixed evenly spaced subset of N samples "
+                             "(identical across models; see utils/subset.py)")
+    parser.add_argument("--sample-ids", help="score only these samples (comma separated)")
 
     args = parser.parse_args(argv)
     history = "markov" if args.setting == "WM-Markov" else "fullhist"
@@ -39,25 +44,36 @@ def main(argv=None) -> int:
         else OFFLINE_EVALUATION_ROOT / args.model / history
     )
 
-    sample_ids = load_sample_ids()
+    all_ids = load_sample_ids()
+    sample_ids = list(all_ids)
+    if args.subset:
+        from utils.subset import subset_ids
+        sample_ids = subset_ids(all_ids, args.subset)
+    elif args.sample_ids:
+        wanted = {value.strip() for value in args.sample_ids.split(",") if value.strip()}
+        sample_ids = [sid for sid in all_ids if sid in wanted]
+        if not sample_ids:
+            raise SystemExit(f"--sample-ids matched no sample: {args.sample_ids}")
     run = load_json(config_dir / "run.json")
     if run.get("model", {}).get("model_id") != args.model:
-        raise SystemExit("rollout 模型与 --model 不一致")
+        raise SystemExit("rollout model does not match --model")
     if run.get("model", {}).get("history_setting") != args.setting:
-        raise SystemExit("rollout history setting 与 --setting 不一致")
+        raise SystemExit("rollout history setting does not match --setting")
     samples = load_json(config_dir / "summary.json").get("samples", {})
 
     from offline.visual_similarity import backend_status, dino_cosine, siglip_cosine
 
     episode_metrics: dict[str, dict[str, float]] = {}
     failures: list[str] = []
+    missing: list[str] = []
     total_transitions = 0
     for sample_id in sample_ids:
         record = samples.get(sample_id, {})
         if record.get("complete") is not True:
-            if record.get("failure_class") != "model":
-                raise SystemExit(f"{sample_id} 的 rollout 记录缺失或非 model failure")
-            failures.append(sample_id)
+            if record.get("failure_class") == "model":
+                failures.append(sample_id)
+            else:
+                missing.append(sample_id)
             continue
         sig_values, dino_values = [], []
         for step, _row in enumerate(load_reference(OFFLINE_DATA_ROOT / sample_id)):
@@ -66,11 +82,11 @@ def main(argv=None) -> int:
             sig = siglip_cosine(gt, pred)
             dino = dino_cosine(gt, pred)
             if sig is None or dino is None:
-                raise SystemExit(f"视觉后端失败于 {sample_id} step {step}：{backend_status()}")
+                raise SystemExit(f"visual backend failed on {sample_id} step {step}: {backend_status()}")
             sig_values.append(float(sig))
             dino_values.append(float(dino))
         if not sig_values:
-            raise SystemExit(f"{sample_id} 没有可评分的 transition")
+            raise SystemExit(f"{sample_id} has no scorable transition")
         episode_metrics[sample_id] = {
             "S_sig": sum(sig_values) / len(sig_values),
             "S_dino": sum(dino_values) / len(dino_values),
@@ -80,11 +96,17 @@ def main(argv=None) -> int:
               f"S_dino={episode_metrics[sample_id]['S_dino']:.4f}", flush=True)
 
     # model failure 计零分并保留在固定分母里，与 judge 评测的聚合口径一致。
+    scored_ids = [sid for sid in sample_ids if sid not in missing]
+    if not scored_ids:
+        raise SystemExit(
+            "no sample has a finished rollout; run offline.rollout first "
+            "(add --subset N to match a trial run)"
+        )
     means = {}
     for metric in ("S_sig", "S_dino"):
         values = [
             0.0 if sample_id in failures else episode_metrics[sample_id][metric]
-            for sample_id in sample_ids
+            for sample_id in scored_ids
         ]
         means[metric] = sum(values) / len(values)
 
@@ -92,7 +114,9 @@ def main(argv=None) -> int:
         "schema": "gui_cc_offline_local_metrics",
         "model": args.model,
         "setting": args.setting,
-        "n_episodes": len(sample_ids),
+        "n_episodes_requested": len(sample_ids),
+        "n_episodes_scored": len(scored_ids),
+        "n_episodes_skipped_no_rollout": len(missing),
         "n_model_failures_zeroed": len(failures),
         "n_transitions_scored": total_transitions,
         "metrics": means,
@@ -101,7 +125,10 @@ def main(argv=None) -> int:
         "backend_status": backend_status(),
     })
     print(json.dumps({"metrics": means}, ensure_ascii=False))
-    print(f"输出：{destination / 'local_metric_results.json'}")
+    if missing:
+        print(f"skipped {len(missing)} sample(s) without a finished rollout "
+              f"(first: {missing[0]})")
+    print(f"written to {destination / 'local_metric_results.json'}")
     return 0
 
 

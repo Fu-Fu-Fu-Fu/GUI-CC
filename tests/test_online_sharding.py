@@ -94,7 +94,7 @@ class MergeTest(unittest.TestCase):
             output_root = root / "out"
             self._build_shard(output_root, 0, 2, ["task_a"], run)
             self._build_shard(output_root, 1, 2, [], run)
-            with self.assertRaisesRegex(ValueError, "缺失或未终结"):
+            with self.assertRaisesRegex(ValueError, "is missing or unfinished"):
                 merge_shards(
                     model="wm", setting="WM-Markov", tasks_file=tasks_file,
                     output_root=output_root, shard_count=2,

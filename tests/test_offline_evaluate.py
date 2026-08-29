@@ -96,7 +96,7 @@ class OfflineInputTest(unittest.TestCase):
             "requested_model": "gpt-5.5-0424-global",
             "api_model": "another-model",
         }):
-            with self.assertRaisesRegex(JudgeError, "响应模型"):
+            with self.assertRaisesRegex(JudgeError, "does not match the requested model"):
                 judge._request("S_ad", [])
 
     def test_二值parser拒绝缺失值和非二值(self) -> None:
@@ -156,7 +156,7 @@ class OfflineInputTest(unittest.TestCase):
     def test_sample_ids无匹配时报错(self) -> None:
         args = SimpleNamespace(sample_ids="999", subset=None)
         with patch("offline.cli.load_sample_ids", return_value=["001"]):
-            with self.assertRaisesRegex(ValueError, "没有匹配"):
+            with self.assertRaisesRegex(ValueError, "matched no sample"):
                 _select_samples(args)
 
     def test_内容endpoint_prompt或配置变化会改变signature(self) -> None:
