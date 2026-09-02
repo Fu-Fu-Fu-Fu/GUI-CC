@@ -292,24 +292,28 @@ just one row lists a single entry in `settings`.
 ## 📄 Citation
 
 ```bibtex
-@inproceedings{fu2026guicc,
-  title     = {{GUI-CC}: Benchmarking Contextual Consistency of {GUI} World Models as Agent Environments},
-  author    = {Fu, Lin and Yang, Zheyuan and Zhang, Tianhui and Wei, Jinbiao and
-               Gan, Guo and Liu, Boxu and Zhao, Yilun and Rong, Yu},
-  booktitle = {Findings of the Association for Computational Linguistics: EMNLP 2026},
-  year      = {2026}
+@misc{fu2026guiccbenchmarkingcontextualconsistency,
+      title={GUI-CC: Benchmarking Contextual Consistency of GUI World Models as Agent Environments}, 
+      author={Lin Fu and Zheyuan Yang and Tianhui Zhang and Jinbiao Wei and Guo Gan and Boxu Liu and Yilun Zhao and Yu Rong},
+      year={2026},
+      eprint={2609.00048},
+      archivePrefix={arXiv},
+      primaryClass={cs.CL},
+      url={https://arxiv.org/abs/2609.00048}, 
 }
 ```
 
 The offline track is derived from GUI-Odyssey; please cite it as well:
 
 ```bibtex
-@article{lu2024guiodyssey,
-  title   = {GUI Odyssey: A Comprehensive Dataset for Cross-App GUI Navigation on Mobile Devices},
-  author  = {Lu, Quanfeng and Shao, Wenqi and Liu, Zitao and Meng, Fanqing and Lin, Boxuan and
-             Chen, Yaxin and Huang, Botong and Zhang, Kaipeng and Qiao, Yu and Luo, Ping},
-  journal = {arXiv preprint arXiv:2406.08451},
-  year    = {2024}
+@misc{lu2025guiodysseycomprehensivedatasetcrossapp,
+      title={GUIOdyssey: A Comprehensive Dataset for Cross-App GUI Navigation on Mobile Devices}, 
+      author={Quanfeng Lu and Wenqi Shao and Zitao Liu and Lingxiao Du and Fanqing Meng and Boxuan Li and Botong Chen and Siyuan Huang and Kaipeng Zhang and Ping Luo},
+      year={2025},
+      eprint={2406.08451},
+      archivePrefix={arXiv},
+      primaryClass={cs.CV},
+      url={https://arxiv.org/abs/2406.08451}, 
 }
 ```
 
